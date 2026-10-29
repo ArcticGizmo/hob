@@ -1,6 +1,7 @@
-# In-process core for the ergonomics spike. Jumps resolve inside the shell because starting any process
-# costs ~70 ms on this EDR-scanned machine. Only plugin commands start a process, and since a child
-# cannot change its parent's directory, they move the shell through the directives file instead.
+# In-process core for the ergonomics spike, loaded by the generated hob.ps1 on PATH, which PowerShell runs
+# inside the calling session. Jumps resolve here because starting any process costs ~70 ms on this
+# EDR-scanned machine. Plugin commands that are separate programs cannot change their parent's directory,
+# so they move the shell through the directives file instead.
 param([bool]$FlatPlaces = $false)
 
 $script:SpikeDir = $PSScriptRoot
@@ -8,14 +9,24 @@ $script:PluginsDir = Join-Path $PSScriptRoot 'plugins'
 $script:LocalRootsFile = Join-Path $PSScriptRoot 'roots.local.json'
 $script:FlatPlaces = $FlatPlaces
 $script:Builtins = [ordered]@{
-    list  = 'Show everything hob knows'
-    to    = 'Jump to a place: h to <place> or h to <plugin> <place>'
-    cd    = 'Same as to'
+    list   = 'Show everything hob knows'
+    to     = 'Jump to a place: hob to <place> or hob to <plugin> <place>'
+    cd     = 'Same as to'
+    path   = 'Print a place''s folder instead of going there, e.g. code (hob path spike)'
     back   = 'Go back to where the last jump came from'
     recent = 'Places ranked by how often and how recently you go there'
     naive  = 'Try to cd from inside a child process, to watch it fail'
 }
-$script:PlaceBuiltins = @('to', 'cd', 'naive')
+$script:PlaceBuiltins = @('to', 'cd', 'path', 'naive')
+$script:SettingsFile = $env:HOB_SPIKE_SETTINGS
+if (-not $script:SettingsFile) { $script:SettingsFile = Join-Path $env:LOCALAPPDATA 'hob-spike\settings.json' }
+$script:BinDir = $env:HOB_SPIKE_BIN
+if (-not $script:BinDir) { $script:BinDir = Join-Path $env:LOCALAPPDATA 'hob-spike\bin' }
+$script:ForceWrite = $false
+# A file on PATH cannot shadow these: cmd runs its built-in commands first.
+$script:CmdInternal = @('assoc', 'break', 'call', 'cd', 'chdir', 'cls', 'color', 'copy', 'date', 'del', 'dir', 'echo', 'endlocal',
+    'erase', 'exit', 'for', 'ftype', 'goto', 'if', 'md', 'mkdir', 'mklink', 'move', 'path', 'pause', 'popd', 'prompt', 'pushd',
+    'rd', 'rem', 'ren', 'rename', 'rmdir', 'set', 'setlocal', 'shift', 'start', 'time', 'title', 'type', 'ver', 'verify', 'vol')
 $script:ReadKey = { [Console]::ReadKey($true) }
 # Machine-local and outside the repo: it records where you go, which is nobody else's business.
 $script:HistoryFile = $env:HOB_SPIKE_HISTORY
@@ -70,6 +81,7 @@ function Expand-HobPath {
 function Get-HobModelStamp {
     $files = @(Get-ChildItem -LiteralPath $script:PluginsDir -Directory | ForEach-Object { Join-Path $_.FullName 'plugin.json' })
     $files += $script:LocalRootsFile
+    $files += $script:SettingsFile
     ($files | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object { "$_|$((Get-Item -LiteralPath $_).LastWriteTimeUtc.Ticks)" }) -join ';'
 }
 
@@ -116,7 +128,7 @@ function Get-HobModel {
     $top = @(foreach ($name in $script:Builtins.Keys) { [pscustomobject]@{ Kind = 'builtin'; Name = $name; Description = $script:Builtins[$name] } })
     $top += $plugins
 
-    # Every place from every plugin, so `h to` can search them all. A plugin's root is a place named after it.
+    # Every place from every plugin, so `hob to` can search them all. A plugin's root is a place named after it.
     $places = @()
     foreach ($plugin in $plugins) {
         if ($plugin.Root) {
@@ -160,6 +172,167 @@ function Get-HobModel {
     $script:Model
 }
 
+function Get-HobSettings {
+    $settings = @{ alias = 'hb'; shortcuts = $true }
+    if (Test-Path -LiteralPath $script:SettingsFile) {
+        $file = Get-Content -Raw -LiteralPath $script:SettingsFile | ConvertFrom-Json
+        if ($null -ne $file.alias) { $settings.alias = [string]$file.alias }
+        if ($null -ne $file.shortcuts) { $settings.shortcuts = [bool]$file.shortcuts }
+    }
+    $settings
+}
+
+# Get-Command is far too slow for this (over a second in PowerShell 7 even with -ListImported, ~60 ms per
+# name for a PATH search), so the alias and function drives, loaded modules and PATH are checked directly.
+function Test-HobNameTaken {
+    param([string]$Name)
+    if ($script:CmdInternal -contains $Name) { return $true }
+    if (Test-Path -LiteralPath "Alias:\$Name") { return $true }
+    if (Test-Path -LiteralPath "Function:\$Name") { return $true }
+    foreach ($module in Get-Module) {
+        if ($module.Name -ne 'hob' -and $module.ExportedCommands.ContainsKey($Name)) { return $true }
+    }
+    $bin = [IO.Path]::GetFullPath($script:BinDir).TrimEnd('\')
+    foreach ($dir in $env:PATH.Split(';')) {
+        $dir = $dir.Trim('"').TrimEnd('\')
+        if (-not $dir -or $dir -eq $bin) { continue }
+        foreach ($ext in @('') + $env:PATHEXT.Split(';')) {
+            try { if ([IO.File]::Exists([IO.Path]::Combine($dir, $Name + $ext))) { return $true } }
+            catch { break }
+        }
+    }
+    $false
+}
+
+function Write-HobFileIfChanged {
+    param([string]$Path, [string]$Content, [Text.Encoding]$Encoding)
+    if ((Test-Path -LiteralPath $Path) -and [IO.File]::ReadAllText($Path) -eq $Content) { return }
+    [IO.File]::WriteAllText($Path, $Content, $Encoding)
+}
+
+# One file per shell for every command name, in a folder on PATH, so no shell needs any setup: PowerShell
+# prefers name.ps1 and runs it inside the session, cmd runs name.cmd inside the window, and Git Bash runs
+# the extension-less name as a separate process. Startup files are never touched.
+function Write-HobBin {
+    param($Model)
+    $settings = Get-HobSettings
+    $marker = 'Generated by hob; do not edit.'
+    $psm1 = (Join-Path $script:SpikeDir 'hob.psm1').Replace("'", "''")
+    $cmd = Join-Path $script:SpikeDir 'cmd\hob.cmd'
+    $sh = [regex]::Replace((Join-Path $script:SpikeDir 'bash\hob.sh'), '^([A-Za-z]):', { param($m) "/$($m.Groups[1].Value.ToLowerInvariant())" })
+    $sh = $sh.Replace('\', '/').Replace("'", "'\''")
+
+    $names = [ordered]@{ hob = '' }
+    if ($settings.alias) {
+        if (Test-HobNameTaken $settings.alias) { Write-Warning "hob: no '$($settings.alias)' short name, because it would hide an existing command" }
+        else { $names[$settings.alias] = '' }
+    }
+    if ($settings.shortcuts) {
+        foreach ($plugin in $Model.Plugins) {
+            if ($names.Contains($plugin.Name)) { continue }
+            if (Test-HobNameTaken $plugin.Name) { Write-Warning "hob: no '$($plugin.Name)' shortcut, because it would hide an existing command"; continue }
+            $names[$plugin.Name] = $plugin.Name
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $script:BinDir)) { [void](New-Item -ItemType Directory -Path $script:BinDir) }
+    $utf8Bom = New-Object Text.UTF8Encoding $true
+    $utf8 = New-Object Text.UTF8Encoding $false
+    $keep = @{}
+    foreach ($name in $names.Keys) {
+        $prefix = $names[$name]
+        $call = if ($prefix) { "hob $prefix @w" } else { 'hob @w' }
+        $ps1 = @"
+# $marker PowerShell runs scripts found on PATH inside the calling session, which is
+# what lets this move your shell. The completer is declared here so the first Tab in a new window works.
+param(
+    [Parameter(ValueFromRemainingArguments)]
+    [ArgumentCompleter({
+        param(`$commandName, `$parameterName, `$wordToComplete, `$commandAst)
+        `$hobModule = Get-Module hob | Where-Object Path -eq '$psm1'
+        if (-not `$hobModule) { `$hobModule = Import-Module '$psm1' -PassThru }
+        & `$hobModule { param(`$a, `$w, `$p) Get-HobShimCompletion `$a `$w `$p } `$commandAst `$wordToComplete '$prefix'
+    })]
+    [string[]]`$Words
+)
+`$hobModule = Get-Module hob | Where-Object Path -eq '$psm1'
+if (-not `$hobModule) { `$hobModule = Import-Module '$psm1' -PassThru }
+& `$hobModule { param(`$w) $call } `$Words
+exit `$global:LASTEXITCODE
+"@
+        $bat = "@rem $marker cmd runs batch files inside the calling window, which is what lets this move it.`r`n@`"$cmd`" $prefix %*`r`n"
+        $bash = "#!/usr/bin/env bash`n# $marker Git Bash runs this as a separate process, so it cannot change your`n# directory. Use  cd `"`$(hob path <place>)`"  instead.`nsource '$sh'`nhob_main $prefix `"`$@`"`n"
+        Write-HobFileIfChanged (Join-Path $script:BinDir "$name.ps1") $ps1 $utf8Bom
+        Write-HobFileIfChanged (Join-Path $script:BinDir "$name.cmd") $bat $utf8
+        Write-HobFileIfChanged (Join-Path $script:BinDir $name) $bash $utf8
+        foreach ($file in "$name.ps1", "$name.cmd", $name) { $keep[$file] = $true }
+    }
+
+    # Remove commands for plugins that no longer exist, but only files hob wrote.
+    foreach ($file in Get-ChildItem -LiteralPath $script:BinDir -File) {
+        if ($keep[$file.Name]) { continue }
+        $head = (Get-Content -LiteralPath $file.FullName -TotalCount 3 -ErrorAction SilentlyContinue) -join "`n"
+        if ($head -like "*$marker*") { Remove-Item -LiteralPath $file.FullName }
+    }
+}
+
+# Edits the raw registry value rather than using [Environment]::SetEnvironmentVariable, which reads PATH
+# expanded and writes it back as a plain string, silently baking in every %VARIABLE% reference.
+function Set-HobUserPathEntry {
+    param([string]$Entry, [switch]$Remove, [string]$KeyPath = 'Environment')
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($KeyPath)
+    try {
+        $raw = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+        if ($raw) { $kind = $key.GetValueKind('Path') }
+        $entries = @($raw.Split(';') | Where-Object { $_ })
+        $present = @($entries | Where-Object { $_.TrimEnd('\') -eq $Entry.TrimEnd('\') }).Count -gt 0
+        if ($Remove) {
+            if (-not $present) { return $false }
+            $entries = @($entries | Where-Object { $_.TrimEnd('\') -ne $Entry.TrimEnd('\') })
+        }
+        else {
+            if ($present) { return $false }
+            $entries += $Entry
+        }
+        $key.SetValue('Path', ($entries -join ';'), $kind)
+    }
+    finally { $key.Dispose() }
+    if ($KeyPath -eq 'Environment') {
+        # Writing a user variable through .NET broadcasts WM_SETTINGCHANGE, which is what tells Explorer, and
+        # so newly opened terminals, that PATH changed. A throwaway variable avoids needing native code for it.
+        [Environment]::SetEnvironmentVariable('HOB_SPIKE_REFRESH', '1', 'User')
+        [Environment]::SetEnvironmentVariable('HOB_SPIKE_REFRESH', $null, 'User')
+    }
+    $true
+}
+
+function Update-HobFiles {
+    $script:ForceWrite = $true
+    try {
+        $script:Model = $null
+        $script:ModelStamp = $null
+        [void](Get-HobModel)
+    }
+    finally { $script:ForceWrite = $false }
+}
+
+function Get-HobShimCompletion {
+    param($CommandAst, [string]$WordToComplete, [string]$Prefix)
+    $words = @()
+    if ($Prefix) { $words += $Prefix }
+    foreach ($element in @($CommandAst.CommandElements | Select-Object -Skip 1)) {
+        if ($element -is [System.Management.Automation.Language.StringConstantExpressionAst]) { $words += $element.Value }
+        else { $words += $element.Extent.Text }
+    }
+    if ($WordToComplete -and $words.Count) { $words = @($words | Select-Object -First ($words.Count - 1)) }
+    foreach ($line in Get-HobCompletion (Get-HobModel) $WordToComplete $words) {
+        $value, $description = $line -split "`t", 2
+        if (-not $description) { $description = $value }
+        [System.Management.Automation.CompletionResult]::new($value, $value, 'ParameterValue', $description)
+    }
+}
+
 function Get-HobPrefixes {
     param([string]$Name)
     $lower = $Name.ToLowerInvariant()
@@ -176,10 +349,11 @@ function Write-HobIndex {
     $sha = [Security.Cryptography.SHA256]::Create()
     $digest = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes("$($script:ModelStamp);$($module.LastWriteTimeUtc.Ticks)"))
     $header = "# hob spike index $(-join ($digest[0..7] | ForEach-Object { $_.ToString('x2') })). Generated by hob.psm1; do not edit."
-    if (Test-Path -LiteralPath $script:IndexFile) {
+    if (-not $script:ForceWrite -and (Test-Path -LiteralPath $script:IndexFile) -and (Test-Path -LiteralPath (Join-Path $script:BinDir 'hob.ps1'))) {
         $reader = New-Object IO.StreamReader($script:IndexFile)
         try { if ($reader.ReadLine() -eq $header) { return } } finally { $reader.Dispose() }
     }
+    Write-HobBin $Model
 
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add($header)
@@ -274,8 +448,8 @@ function Resolve-HobWords {
         if (-not $found.Entry) {
             if ($found.Candidates.Count -gt 1) { Write-HobError "'$($Words[$i])' is ambiguous in ${scope}: $(($found.Candidates | ForEach-Object Name) -join ', ')" }
             elseif ($scope -eq 'hob' -and ($places = @($script:Model.Places | Where-Object Name -eq $Words[$i])).Count) {
-                $suggestions = ($places | ForEach-Object { "'h to $($_.Qualified)'" }) -join ' or '
-                if ($places.Count -eq 1) { $suggestions = "'h to $($Words[$i])'" }
+                $suggestions = ($places | ForEach-Object { "'hob to $($_.Qualified)'" }) -join ' or '
+                if ($places.Count -eq 1) { $suggestions = "'hob to $($Words[$i])'" }
                 Write-HobError "'$($Words[$i])' is a place. Did you mean ${suggestions}?"
             }
             else { Write-HobError "'$($Words[$i])' is not something $scope knows. Try 'hob list'." }
@@ -312,9 +486,9 @@ function Resolve-HobPlace {
     if ($Quiet) { return $null }
     if ($found.Candidates.Count -gt 1) {
         $names = ($found.Candidates | ForEach-Object Qualified) -join ', '
-        Write-HobError "'$token' could be: $names. Be more specific, for example 'h to $($found.Candidates[0].Qualified)'."
+        Write-HobError "'$token' could be: $names. Be more specific, for example 'hob to $($found.Candidates[0].Qualified)'."
     }
-    else { Write-HobError "no place called '$($Words -join ' ')'. 'h to' lists them all." }
+    else { Write-HobError "no place called '$($Words -join ' ')'. 'hob to' lists them all." }
     $null
 }
 
@@ -571,7 +745,7 @@ function Invoke-HobCommand {
         $runArgs = @($Command.Run | Select-Object -Skip 1) + @($Extra)
         if ($exe -like '*.ps1') {
             # Plugins are trusted, so PowerShell commands run in this session (~5 ms rather than 200 ms+ for a
-            # new process) and may move it directly. A move is re-recorded on hob's stack so `h back` undoes it.
+            # new process) and may move it directly. A move is re-recorded on hob's stack so `hob back` undoes it.
             $before = Get-Location
             $global:LASTEXITCODE = 0
             & $exe @runArgs
@@ -630,7 +804,7 @@ function Show-HobList {
 
 function Show-HobPlaces {
     param($Model)
-    'Places: h to <name>, or h to <plugin> <name> when a name is shared'
+    'Places: hob to <name>, or hob to <plugin> <name> when a name is shared'
     foreach ($plugin in $Model.Plugins) {
         $locations = @($plugin.Children | Where-Object Kind -eq 'location')
         if (-not $plugin.Root -and -not $locations.Count) { continue }
@@ -705,17 +879,32 @@ function hob {
                 default {
                     $rest = $resolved.Rest
                     $interactive = Test-HobInteractive
+                    $printOnly = $entry.Name -eq 'path'
                     if ($rest.Count -and $rest[0] -in '--list', '-l') { Show-HobPlaces $model; return }
-                    if (-not $rest.Count -and -not $interactive) { Show-HobPlaces $model; return }
+                    if (-not $rest.Count -and -not $interactive) {
+                        if ($printOnly) { Write-HobError 'usage: hob path <place>' } else { Show-HobPlaces $model }
+                        return
+                    }
 
+                    $place = $null
+                    $how = 'to'
+                    $index = -1
+                    $query = $rest -join ' '
                     if ($rest.Count) {
                         $place = Resolve-HobPlace $model $rest -Quiet:$interactive
-                        if ($place) { Invoke-HobJump $place 'to' -Query ($rest -join ' '); return }
-                        if (-not $interactive) { return }
+                        if (-not $place -and -not $interactive) { return }
                     }
-                    $pick = Show-HobPicker $model.Places ($rest -join ' ')
-                    if (-not $pick) { $global:LASTEXITCODE = 1; return }
-                    Invoke-HobJump $pick.Place 'picker' $pick.Index $pick.Query
+                    if (-not $place) {
+                        $pick = Show-HobPicker $model.Places $query
+                        if (-not $pick) { $global:LASTEXITCODE = 1; return }
+                        $place, $how, $index, $query = $pick.Place, 'picker', $pick.Index, $pick.Query
+                    }
+                    if ($printOnly) {
+                        $place.Path
+                        Add-HobVisit $place.Path 'path' $index $query
+                        return
+                    }
+                    Invoke-HobJump $place $how $index $query
                 }
             }
         }
@@ -724,4 +913,6 @@ function hob {
     }
 }
 
-Export-ModuleMember -Function hob
+# Nothing is exported: a global `hob` function would take precedence over hob.ps1 on PATH, and with it the
+# completer declared there. The generated scripts call in through the module object instead.
+Export-ModuleMember -Function @()

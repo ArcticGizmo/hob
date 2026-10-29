@@ -26,8 +26,13 @@ set "w2=%~2"
 set "w3=%~3"
 if not defined w1 goto list
 if /i "%w1%"=="list" goto list
+set "mode=jump"
 if /i "%w1%"=="to" goto to
 if /i "%w1%"=="cd" goto to
+if /i "%w1%"=="path" (
+    set "mode=path"
+    goto to
+)
 if /i "%w1%"=="__shortcuts" goto shortcuts
 if /i "%w1%"=="back" (
     >>"%apply%" echo back
@@ -38,20 +43,34 @@ if /i "%w1%"=="naive" goto pwshonly
 goto plugin
 
 :to
-if not defined w2 goto listplaces
+if not defined w2 (
+    if "%mode%"=="path" (
+        1>&2 echo hob: usage: hob path ^<place^>
+        set "code=1"
+        goto finish
+    )
+    goto listplaces
+)
 set "key=%w2%"
 if defined w3 set "key=%w2% %w3%"
 call :lookup to "%key%"
-if defined found goto jumpfound
+if defined found goto placefound
 call :lookup to? "%key%"
 if not defined found goto noplace
 for /f "tokens=1 delims=," %%f in ("%found%") do set "first=%%f"
-1>&2 echo hob: '%key%' could be: %found%. Be more specific, for example 'h to %first%'.
+1>&2 echo hob: '%key%' could be: %found%. Be more specific, for example 'hob to %first%'.
 set "code=1"
 goto finish
 :noplace
-1>&2 echo hob: no place called '%key%'. 'h to' lists them all.
+1>&2 echo hob: no place called '%key%'. 'hob to' lists them all.
 set "code=1"
+goto finish
+
+:placefound
+if not "%mode%"=="path" goto jumpfound
+setlocal EnableDelayedExpansion
+echo(!found!
+endlocal
 goto finish
 
 :plugin
@@ -66,7 +85,7 @@ if defined found (
 call :lookup to "%w1%"
 if not defined found call :lookup to? "%w1%"
 if defined found (
-    1>&2 echo hob: '%w1%' is a place. Did you mean 'h to %w1%'?
+    1>&2 echo hob: '%w1%' is a place. Did you mean 'hob to %w1%'?
 ) else (
     1>&2 echo hob: '%w1%' is not something hob knows. Try 'hob list'.
 )
@@ -199,7 +218,7 @@ for /f "usebackq tokens=1,2,* delims=|" %%a in ("%index%") do if "%%a"=="top" ec
 goto finish
 
 :listplaces
-echo Places: h to ^<name^>, or h to ^<plugin^> ^<name^> when a name is shared
+echo Places: hob to ^<name^>, or hob to ^<plugin^> ^<name^> when a name is shared
 for /f "usebackq tokens=1,2,* delims=|" %%a in ("%index%") do if "%%a"=="list" echo   %%b  -  %%c
 goto finish
 

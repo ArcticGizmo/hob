@@ -7,6 +7,8 @@
 | Shells | Windows PowerShell 5.1, PowerShell 7.6, Git Bash (bash 5.3), cmd |
 | Result | **Pass**, with a changed design: line-based directives instead of JSON, and a generated index for cmd and bash |
 
+> **Update, same day:** the per-session loaders measured here (`hob.ps1` dot-sourced, `init.cmd`, sourcing `bash/hob.sh`) were replaced by a one-time install: a folder on the user PATH holding `name.ps1`, `name.cmd` and an extension-less `name` for every command, so no shell needs setup or startup-file edits. Git Bash dropped to lookup style (`cd "$(hob path git)"`), losing in-shell jumps, completion and the `select` picker for jumps. The directive format, the index and every hostile-input result below are unchanged. See `spikes/ergonomics/README.md`.
+
 ## Question
 
 Can PowerShell 7, cmd and Git Bash all apply `cd` and environment changes from a structured file without any eval, while refusing malformed and hostile input?
