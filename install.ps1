@@ -7,15 +7,17 @@
     SHA256SUMS.txt published alongside it, and runs it. Every later update is Velopack's job, via
     `hob update`.
 
-    Download it, read it, then run it. Do not pipe it into Invoke-Expression: a script you have not read
-    should not run in your session, and many endpoint protection products block that pattern anyway.
+    Designed to be run as a one-liner:
+
+        irm https://raw.githubusercontent.com/ArcticGizmo/hob/main/install.ps1 | iex
+
+    or, where endpoint protection blocks piping into iex, downloaded, read and run as a file:
 
         Invoke-WebRequest https://raw.githubusercontent.com/ArcticGizmo/hob/main/install.ps1 -OutFile install-hob.ps1
-        notepad install-hob.ps1
         .\install-hob.ps1
 
-    A file saved by Invoke-WebRequest carries no mark-of-the-web, so it runs under the RemoteSigned
-    execution policy, and the Setup.exe it downloads skips the SmartScreen prompt a browser download hits.
+    Nothing here tags a download with the mark-of-the-web, so the Setup.exe it downloads skips the
+    SmartScreen prompt a browser download hits.
 
     KEEP THIS FILE PURE ASCII. It has no byte-order mark, so Windows PowerShell 5.1 decodes it with the
     system codepage. A UTF-8 em dash then arrives as characters ending in a curly closing quote, which
@@ -23,21 +25,26 @@
 
 .PARAMETER Version
     Install a specific version (e.g. 0.1.0) instead of the latest release. A leading "v" is fine.
+    Also reads $env:HOB_VERSION, which is how you pin through the piped one-liner:
+        $env:HOB_VERSION = '0.1.0'; irm .../install.ps1 | iex
 
 .PARAMETER Repo
-    owner/name of the GitHub repository to install from, for a fork.
+    owner/name of the GitHub repository to install from, for a fork. Also reads $env:HOB_REPO.
 
 .EXAMPLE
-    .\install-hob.ps1
+    irm https://raw.githubusercontent.com/ArcticGizmo/hob/main/install.ps1 | iex
 
 .EXAMPLE
     .\install-hob.ps1 -Version 0.1.0
 #>
 #Requires -Version 5.1
 param(
-    [string] $Version,
-    [string] $Repo = 'ArcticGizmo/hob'
+    [string] $Version = $env:HOB_VERSION,
+    [string] $Repo    = $(if ($env:HOB_REPO) { $env:HOB_REPO } else { 'ArcticGizmo/hob' })
 )
+
+# Failures are raised with `throw`, never `exit`: through the one-liner this runs inside the user's own
+# shell, and `exit` there would close it.
 
 function Install-Hob {
     [CmdletBinding()]
