@@ -18,10 +18,29 @@ if ($Alias) {
     Set-Alias -Name $Alias -Value hob -Scope Global
 }
 
+# Get-Command is far too slow for this at shell start: over a second in PowerShell 7 even with -ListImported,
+# and ~60 ms per name for a PATH search. Checking the function and alias drives, loaded modules and PATH
+# directly covers what a shortcut could realistically hide in a few milliseconds.
+$hobNameTaken = {
+    param([string]$Name)
+    $function = Get-Item -LiteralPath "Function:\$Name" -ErrorAction SilentlyContinue
+    if ($function -and $function.Definition -notmatch '^\s*hob \$plugin') { return $true }
+    if (Test-Path -LiteralPath "Alias:\$Name") { return $true }
+    foreach ($module in Get-Module) { if ($module.ExportedCommands.ContainsKey($Name)) { return $true } }
+    foreach ($dir in $env:PATH.Split(';')) {
+        $dir = $dir.Trim('"')
+        if (-not $dir) { continue }
+        foreach ($ext in $env:PATHEXT.Split(';')) {
+            try { if ([IO.File]::Exists([IO.Path]::Combine($dir, $Name + $ext))) { return $true } }
+            catch { break }
+        }
+    }
+    $false
+}
+
 if (-not $NoShortcuts) {
     foreach ($name in (hob __shortcuts)) {
-        $current = Get-Command -Name $name -ErrorAction SilentlyContinue
-        if ($current -and -not ($current.CommandType -eq 'Function' -and $current.Definition -match '^\s*hob \$plugin')) {
+        if (& $hobNameTaken $name) {
             Write-Warning "hob: skipped shortcut '$name' because it would hide an existing command"; continue
         }
         $plugin = $name

@@ -5,6 +5,5 @@ set "name=%~nx1"
 if "%name%"=="" set "name=scratch-%RANDOM%"
 set "dir=%LOCALAPPDATA%\Temp\hob-spike\%name%"
 if not exist "%dir%" mkdir "%dir%"
-set "json=%dir:\=\\%"
->>"%HOB_DIRECTIVES%" echo {"cd":"%json%"}
+>>"%HOB_DIRECTIVES%" echo cd %dir%
 echo made %dir%

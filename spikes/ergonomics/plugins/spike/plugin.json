@@ -16,6 +16,10 @@
       "description": "Make a scratch folder in temp and jump into it",
       "run": ["{plugin}\\commands\\mkcd.cmd"]
     },
+    "gitroot": {
+      "description": "Jump to the root of the git repository you are in (PowerShell, runs in your session)",
+      "run": ["{plugin}\\commands\\gitroot.ps1"]
+    },
     "stamp": {
       "description": "Set $env:HOB_STAMP in your shell to the current time",
       "run": ["{plugin}\\commands\\stamp.cmd"]

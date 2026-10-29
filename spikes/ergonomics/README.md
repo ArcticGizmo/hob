@@ -37,6 +37,7 @@ It only lasts for the current session. `h` normally means `Get-History`, and the
 | `spike mkcd demo` | A plugin command that creates a folder and moves your shell into it |
 | `spike stamp`, then `$env:HOB_STAMP` | A plugin command that sets an environment variable in your shell |
 | `spike hello` | A plugin command that only prints |
+| `spike gitroot`, then `h back` | A PowerShell plugin command: runs inside your session, so it moves the shell directly, and `back` still undoes it |
 | `h to <Tab>`, `h to do<Tab>`, `h to spike <Tab>` | Place completion. Shared names complete to their qualified form (`nav docs`). Ctrl+Space shows the menu |
 
 ### The picker
@@ -62,27 +63,42 @@ Top-level names are only built-ins and plugins, so a place can never clash with 
 
 Locations come from `plugins/*/plugin.json`. Edits are picked up on the next command. Roots are `{home}`, `{temp}`, `{hob}` (this repo) and `{git}` (defaults to `~/Documents/git`). Override any of them in a gitignored `roots.local.json` next to `hob.psm1`, for example `{ "git": "D:/src" }`.
 
+## Other shells
+
+```bash
+source spikes/ergonomics/bash/hob.sh          # Git Bash: hob, h, shortcuts as aliases, Tab completion
+```
+
+```bat
+spikes\ergonomics\cmd\init.cmd                 :: cmd: hob on PATH, h and shortcuts as doskey macros
+```
+
+Both read `%LOCALAPPDATA%\hob-spike\index.txt`, which `hob.psm1` writes whenever the manifests change. It lists every spelling hob accepts, already resolved, so the other shells look keys up instead of reimplementing the matching. If it is missing or older than a manifest, bash rebuilds it automatically by running PowerShell once; in cmd, run `hob reindex`. Jumps, `back`, plugin-scoped jumps and plugin commands work everywhere. Bash also has completion, history and a `select` menu for `h to` and ambiguous names. cmd has no completion (that needs Clink) and records no history. `recent` and `naive` are PowerShell-only. See `docs/experiments/03-directives-across-shells.md` for timings and the hostile-input results.
+
 ## How it works
 
 Jumps never leave the shell. `hob.psm1` reads the manifests (cached until one changes), resolves the words and calls `Push-Location` itself. Starting even an empty process costs about 70 ms on this machine, so keeping the most common action in-process is what makes it fast.
 
-Plugin commands are separate programs, so they cannot move the shell. They use a directives file instead:
+Plugin commands written in PowerShell (`.ps1`) run inside your session, because plugins are trusted code and a new PowerShell process costs 200 ms or more. They can `Set-Location` or set variables directly; if one moves you, hob records where you were so `h back` returns there. In bash and cmd they are refused with a message, since they would have to run in a separate PowerShell and could not move that shell anyway.
+
+Every other plugin command is a separate program, so it cannot move the shell. It uses a directives file instead:
 
 ```
 you type: spike mkcd demo
   │
   ├─ hob (in your shell) creates an empty temp file, sets $env:HOB_DIRECTIVES to its path
   │
-  ├─ mkcd.cmd (child process) makes the folder and appends {"cd":"...\\hob-spike\\demo"}
+  ├─ mkcd.cmd (child process) makes the folder and appends the line: cd C:\...\hob-spike\demo
   │
   └─ hob (in your shell) reads the file and applies known directives only:
-       cd    → Push-Location (so `h back` can Pop-Location)
-       env   → set or clear $env:NAME (names validated)
-       back  → Pop-Location
+       cd C:\abs\path   → Push-Location (so `h back` can Pop-Location)
+       env NAME=value   → set $env:NAME
+       unset NAME       → remove $env:NAME
+       back             → Pop-Location
      anything else is reported and ignored, then the file is deleted
 ```
 
-Nothing from the file is evaluated as code. A directive like `{"cd": "C:\\; Remove-Item x"}` is just a path that does not exist.
+One action per line, because cmd and bash can split that with builtins but cannot parse JSON. Nothing from the file is evaluated as code: `cd C:\; Remove-Item x` is just a path that does not exist. Names bash would execute (`PROMPT_COMMAND`, `PS1` and friends) are refused in every shell.
 
 ## Measured on this machine
 
@@ -91,11 +107,12 @@ Nothing from the file is evaluated as code. A directive like `{"cd": "C:\\; Remo
 | Jump (`h to git`, `h to sp pl`) | 4–18 ms | 6–19 ms |
 | Tab completion | 3–20 ms | 5–9 ms |
 | Plugin command (`spike hello`, a `.cmd`) | 40–55 ms | 50–60 ms |
+| PowerShell plugin command (`spike gitroot`) | 14–20 ms | 22–26 ms |
+| Loading `hob.ps1` in a new session | 250–400 ms | 230–290 ms |
 
 The same jumps through a Node child process took 175–300 ms.
 
 ## Known differences from the real thing
 
 - Manifests are JSON because PowerShell parses it natively. E7 decides the real format.
-- Only a PowerShell adapter exists. cmd and Git Bash cannot parse manifests themselves, so they will likely read a flat index the core generates (see E3).
 - Demo commands are `.cmd` files only to avoid dependencies. A PowerShell-script command would either pay for a new PowerShell process (200 ms+) or run inside your shell, which is a trust decision still to make.
