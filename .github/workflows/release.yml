@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+# The build job produces the artifacts but does not touch the GitHub Release. The release job `needs` it, so a
+# build failure means no release is published rather than a half-populated one.
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=$($env:GITHUB_REF_NAME -replace '^v','')" >> $env:GITHUB_OUTPUT
+
+      # The same script as a local build, so what ships is what was tested. It restores vpk from
+      # dotnet-tools.json, which is pinned to the Velopack library version.
+      - name: Build and pack
+        run: ./build/pack.ps1 -Version ${{ steps.version.outputs.VERSION }}
+
+      # Hob-win-Setup.exe, the update feed hob-cli.exe reads (nupkg + RELEASES + releases.win.json), and the
+      # portable .zip.
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: artifacts/releases/
+          if-no-files-found: error
+
+  release:
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # A GitHub Release is one flat namespace, so flatten and refuse collisions. SHA256SUMS.txt is what people
+      # check the installer against before running it, so it has to describe exactly the uploaded bytes.
+      - name: Collect artifacts and generate SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          while IFS= read -r f; do
+            dest="dist/$(basename "$f")"
+            if [ -e "$dest" ]; then
+              echo "::error::Two build artifacts are both named $(basename "$f") - refusing to publish an ambiguous release."
+              exit 1
+            fi
+            mv "$f" "$dest"
+          done < <(find artifacts -type f | LC_ALL=C sort)
+
+          # The install script resolves this asset by name, so a release without it can't be installed.
+          if [ ! -f dist/Hob-win-Setup.exe ]; then
+            echo "::error::Hob-win-Setup.exe is missing - the install script depends on it."
+            exit 1
+          fi
+
+          # Generated outside dist/ and moved in, so the manifest can never list itself.
+          ( cd dist && LC_ALL=C sha256sum -- * > ../SHA256SUMS.txt )
+          mv SHA256SUMS.txt dist/SHA256SUMS.txt
+
+          echo '### Published assets' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat dist/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
