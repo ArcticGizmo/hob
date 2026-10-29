@@ -2,10 +2,11 @@
 # Dot-sourcing matters: the prefix alias and shortcuts have to land in the caller's global scope.
 param(
     [string]$Alias = 'h',
-    [switch]$NoShortcuts
+    [switch]$NoShortcuts,
+    [switch]$FlatPlaces
 )
 
-Import-Module (Join-Path $PSScriptRoot 'hob.psm1') -Force -Global
+Import-Module (Join-Path $PSScriptRoot 'hob.psm1') -Force -Global -ArgumentList $FlatPlaces.IsPresent
 $global:HobSpikeShortcuts = @()
 
 if ($Alias) {
@@ -53,5 +54,6 @@ Register-ArgumentCompleter -Native -CommandName $completerNames -ScriptBlock $ho
 
 $loaded = 'hob spike loaded'
 if ($Alias) { $loaded += " | prefix alias: $Alias" }
+if ($FlatPlaces) { $loaded += ' | flat places' }
 if ($global:HobSpikeShortcuts) { $loaded += " | shortcuts: $($global:HobSpikeShortcuts -join ', ')" }
 Write-Host $loaded -ForegroundColor DarkGray

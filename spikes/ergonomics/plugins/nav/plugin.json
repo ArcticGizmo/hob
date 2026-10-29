@@ -1,7 +1,6 @@
 {
   "name": "nav",
   "description": "Everyday places",
-  "flat": true,
   "locations": {
     "home": "{home}",
     "docs": "{home}/Documents",
