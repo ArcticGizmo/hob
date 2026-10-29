@@ -1,2 +1,5 @@
 # Contains work project structure
 docs/scope.md
+
+# Machine-local root overrides for the ergonomics spike
+spikes/ergonomics/roots.local.json

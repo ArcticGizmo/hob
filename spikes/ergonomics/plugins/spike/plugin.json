@@ -1,0 +1,24 @@
+{
+  "name": "spike",
+  "description": "The hob repo itself",
+  "root": "{hob}",
+  "locations": {
+    "docs": "docs",
+    "ergo": "spikes/ergonomics",
+    "plugins": "spikes/ergonomics/plugins"
+  },
+  "commands": {
+    "hello": {
+      "description": "Say hello from a child process",
+      "run": ["{plugin}\\commands\\hello.cmd"]
+    },
+    "mkcd": {
+      "description": "Make a scratch folder in temp and jump into it",
+      "run": ["{plugin}\\commands\\mkcd.cmd"]
+    },
+    "stamp": {
+      "description": "Set $env:HOB_STAMP in your shell to the current time",
+      "run": ["{plugin}\\commands\\stamp.cmd"]
+    }
+  }
+}
