@@ -16,7 +16,12 @@ $binDir = & $module { $script:BinDir }
 
 $folder = Split-Path -Parent $settingsFile
 if (-not (Test-Path -LiteralPath $folder)) { [void](New-Item -ItemType Directory -Path $folder) }
-[IO.File]::WriteAllText($settingsFile, ([ordered]@{ alias = $Alias; shortcuts = -not $NoShortcuts } | ConvertTo-Json))
+# Merged rather than overwritten, so plugin folders and roots you have set survive a reinstall.
+$settings = [pscustomobject]@{}
+if (Test-Path -LiteralPath $settingsFile) { $settings = Get-Content -Raw -LiteralPath $settingsFile | ConvertFrom-Json }
+$settings | Add-Member -NotePropertyName alias -NotePropertyValue $Alias -Force
+$settings | Add-Member -NotePropertyName shortcuts -NotePropertyValue (-not $NoShortcuts) -Force
+[IO.File]::WriteAllText($settingsFile, ($settings | ConvertTo-Json -Depth 5))
 & $module { Update-HobFiles }
 
 $commands = @(Get-ChildItem -LiteralPath $binDir -Filter *.ps1 | ForEach-Object BaseName)

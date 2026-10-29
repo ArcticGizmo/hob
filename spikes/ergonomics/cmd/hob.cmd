@@ -38,6 +38,7 @@ if /i "%w1%"=="back" (
     >>"%apply%" echo back
     goto finish
 )
+if /i "%w1%"=="update" goto update
 if /i "%w1%"=="recent" goto pwshonly
 if /i "%w1%"=="naive" goto pwshonly
 goto plugin
@@ -224,6 +225,16 @@ goto finish
 
 :shortcuts
 for /f "usebackq tokens=1,2 delims=|" %%a in ("%index%") do if "%%a"=="short" echo %%b
+goto finish
+
+:update
+if not exist "%spike%\hob-cli.exe" (
+    1>&2 echo hob: this hob runs from a source checkout, so update it with git pull
+    set "code=1"
+    goto finish
+)
+"%spike%\hob-cli.exe" update %2 %3
+set "code=%errorlevel%"
 goto finish
 
 :pwshonly

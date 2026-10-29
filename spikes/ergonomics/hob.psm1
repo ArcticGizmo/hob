@@ -6,7 +6,7 @@ param([bool]$FlatPlaces = $false)
 
 $script:SpikeDir = $PSScriptRoot
 $script:PluginsDir = Join-Path $PSScriptRoot 'plugins'
-$script:LocalRootsFile = Join-Path $PSScriptRoot 'roots.local.json'
+$script:TemplatesDir = Join-Path $PSScriptRoot 'templates'
 $script:FlatPlaces = $FlatPlaces
 $script:Builtins = [ordered]@{
     list   = 'Show everything hob knows'
@@ -15,6 +15,7 @@ $script:Builtins = [ordered]@{
     path   = 'Print a place''s folder instead of going there, e.g. code (hob path spike)'
     back   = 'Go back to where the last jump came from'
     recent = 'Places ranked by how often and how recently you go there'
+    update = 'Update hob to the latest release (installed copies only)'
     naive  = 'Try to cd from inside a child process, to watch it fail'
 }
 $script:PlaceBuiltins = @('to', 'cd', 'path', 'naive')
@@ -22,6 +23,7 @@ $script:SettingsFile = $env:HOB_SPIKE_SETTINGS
 if (-not $script:SettingsFile) { $script:SettingsFile = Join-Path $env:LOCALAPPDATA 'hob-spike\settings.json' }
 $script:BinDir = $env:HOB_SPIKE_BIN
 if (-not $script:BinDir) { $script:BinDir = Join-Path $env:LOCALAPPDATA 'hob-spike\bin' }
+$script:UserPluginsDir = Join-Path (Split-Path -Parent $script:SettingsFile) 'plugins'
 $script:ForceWrite = $false
 # A file on PATH cannot shadow these: cmd runs its built-in commands first.
 $script:CmdInternal = @('assoc', 'break', 'call', 'cd', 'chdir', 'cls', 'color', 'copy', 'date', 'del', 'dir', 'echo', 'endlocal',
@@ -50,20 +52,47 @@ function Write-HobError {
 }
 
 function Get-HobRoots {
+    param($Settings)
     # LOCALAPPDATA\Temp rather than $env:TEMP, which can be an 8.3 short path.
     $temp = Join-Path $env:LOCALAPPDATA 'Temp'
     if (-not (Test-Path -LiteralPath $temp)) { $temp = [IO.Path]::GetTempPath() }
     $roots = @{
         home = $HOME
         temp = $temp
-        hob  = [IO.Path]::GetFullPath((Join-Path $script:SpikeDir '..\..'))
         git  = Join-Path $HOME 'Documents\git'
     }
-    if (Test-Path -LiteralPath $script:LocalRootsFile) {
-        $local = Get-Content -Raw -LiteralPath $script:LocalRootsFile | ConvertFrom-Json
-        foreach ($p in $local.PSObject.Properties) { $roots[$p.Name] = [string]$p.Value }
-    }
+    # {hob} is the repository, which only exists when running from a checkout rather than an install.
+    $repo = [IO.Path]::GetFullPath((Join-Path $script:SpikeDir '..\..'))
+    if (Test-Path -LiteralPath (Join-Path $repo '.git')) { $roots.hob = $repo }
+    foreach ($name in $Settings.roots.Keys) { $roots[$name] = [Environment]::ExpandEnvironmentVariables($Settings.roots[$name]) }
     $roots
+}
+
+# Your own plugin folders come first so a plugin of yours can replace a built-in one with the same name.
+# Built-ins live in the install folder, which an update replaces, so nothing of yours belongs there.
+# These run on every command to check whether plugins changed, so they call .NET directly: PowerShell 7's
+# file cmdlets made the check cost ~36 ms a call, against ~12 ms in Windows PowerShell.
+function Get-HobPluginCandidates {
+    param($Settings)
+    $sources = New-Object System.Collections.Generic.List[string]
+    $all = @($Settings.pluginPaths | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) }) + $script:UserPluginsDir + $script:PluginsDir
+    foreach ($path in $all) { if ($path -and -not $sources.Contains($path)) { $sources.Add($path) } }
+    $sources
+}
+
+function Get-HobPluginSources {
+    param($Settings)
+    foreach ($path in Get-HobPluginCandidates $Settings) { if ([IO.Directory]::Exists($path)) { $path } }
+}
+
+function Get-HobPluginManifests {
+    param($Settings)
+    foreach ($source in Get-HobPluginSources $Settings) {
+        foreach ($dir in [IO.Directory]::GetDirectories($source)) {
+            $manifest = [IO.Path]::Combine($dir, 'plugin.json')
+            if ([IO.File]::Exists($manifest)) { $manifest }
+        }
+    }
 }
 
 function Expand-HobPath {
@@ -78,11 +107,30 @@ function Expand-HobPath {
     [IO.Path]::GetFullPath($expanded)
 }
 
+# Everything whose change should rebuild the model: the settings, each manifest, and each plugin source
+# folder, whose timestamp changes when a plugin folder is added or removed. bash reads the same list from
+# the index to decide when to rebuild it.
+function Get-HobWatchList {
+    $settings = Get-HobSettings
+    $paths = New-Object System.Collections.Generic.List[string]
+    $paths.Add($script:SettingsFile)
+    foreach ($source in Get-HobPluginCandidates $settings) {
+        # A plugin folder that does not exist yet is watched through its nearest existing parent, whose
+        # timestamp changes when the folder is created.
+        $watch = $source
+        while ($watch -and -not [IO.Directory]::Exists($watch)) { $watch = [IO.Path]::GetDirectoryName($watch) }
+        if ($watch -and -not $paths.Contains($watch)) { $paths.Add($watch) }
+    }
+    foreach ($manifest in Get-HobPluginManifests $settings) { $paths.Add($manifest) }
+    $paths
+}
+
 function Get-HobModelStamp {
-    $files = @(Get-ChildItem -LiteralPath $script:PluginsDir -Directory | ForEach-Object { Join-Path $_.FullName 'plugin.json' })
-    $files += $script:LocalRootsFile
-    $files += $script:SettingsFile
-    ($files | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object { "$_|$((Get-Item -LiteralPath $_).LastWriteTimeUtc.Ticks)" }) -join ';'
+    $parts = foreach ($path in Get-HobWatchList) {
+        if ([IO.File]::Exists($path)) { "$path|$([IO.File]::GetLastWriteTimeUtc($path).Ticks)" }
+        elseif ([IO.Directory]::Exists($path)) { "$path|$([IO.Directory]::GetLastWriteTimeUtc($path).Ticks)" }
+    }
+    $parts -join ';'
 }
 
 # Manifests are re-read only when one changes, so edits are live without paying the parse on every call.
@@ -90,13 +138,18 @@ function Get-HobModel {
     $stamp = Get-HobModelStamp
     if ($script:Model -and $stamp -eq $script:ModelStamp) { return $script:Model }
 
-    $roots = Get-HobRoots
+    $settings = Get-HobSettings
+    $roots = Get-HobRoots $settings
     $plugins = @()
-    foreach ($dir in Get-ChildItem -LiteralPath $script:PluginsDir -Directory) {
-        $manifestPath = Join-Path $dir.FullName 'plugin.json'
-        if (-not (Test-Path -LiteralPath $manifestPath)) { continue }
+    foreach ($manifestPath in Get-HobPluginManifests $settings) {
+        $dir = Get-Item -LiteralPath (Split-Path -Parent $manifestPath)
         try {
             $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json -ErrorAction Stop
+            $earlier = @($plugins | Where-Object Name -eq $manifest.name)
+            if ($earlier.Count) {
+                Write-Warning "hob: ignored $manifestPath because '$($manifest.name)' is already provided by $($earlier[0].Dir)"
+                continue
+            }
             $root = $null
             if ($manifest.root) { $root = Expand-HobPath $manifest.root $roots }
             $plugin = [pscustomobject]@{
@@ -172,13 +225,27 @@ function Get-HobModel {
     $script:Model
 }
 
+# Cached until the file changes: every command checks whether plugins changed, and parsing JSON each time
+# was a visible share of a jump.
 function Get-HobSettings {
-    $settings = @{ alias = 'hb'; shortcuts = $true }
-    if (Test-Path -LiteralPath $script:SettingsFile) {
-        $file = Get-Content -Raw -LiteralPath $script:SettingsFile | ConvertFrom-Json
-        if ($null -ne $file.alias) { $settings.alias = [string]$file.alias }
-        if ($null -ne $file.shortcuts) { $settings.shortcuts = [bool]$file.shortcuts }
+    $exists = [IO.File]::Exists($script:SettingsFile)
+    $stamp = if ($exists) { [IO.File]::GetLastWriteTimeUtc($script:SettingsFile).Ticks } else { 'none' }
+    if ($script:SettingsCache -and $stamp -eq $script:SettingsCacheStamp) { return $script:SettingsCache }
+
+    $settings = @{ alias = 'hb'; shortcuts = $true; pluginPaths = @(); roots = @{} }
+    if ($exists) {
+        $file = $null
+        try { $file = Get-Content -Raw -LiteralPath $script:SettingsFile | ConvertFrom-Json -ErrorAction Stop }
+        catch { Write-Warning "hob: ignored $($script:SettingsFile), which is not valid JSON ($_)" }
+        if ($file) {
+            if ($null -ne $file.alias) { $settings.alias = [string]$file.alias }
+            if ($null -ne $file.shortcuts) { $settings.shortcuts = [bool]$file.shortcuts }
+            if ($null -ne $file.pluginPaths) { $settings.pluginPaths = @($file.pluginPaths | ForEach-Object { [string]$_ }) }
+            if ($null -ne $file.roots) { foreach ($p in $file.roots.PSObject.Properties) { $settings.roots[$p.Name] = [string]$p.Value } }
+        }
     }
+    $script:SettingsCache = $settings
+    $script:SettingsCacheStamp = $stamp
     $settings
 }
 
@@ -192,10 +259,14 @@ function Test-HobNameTaken {
     foreach ($module in Get-Module) {
         if ($module.Name -ne 'hob' -and $module.ExportedCommands.ContainsKey($Name)) { return $true }
     }
+    # Both sides go through GetFullPath because on .NET Framework it expands 8.3 short names, so a raw
+    # comparison could miss hob's own folder and report hob's own commands as clashes.
     $bin = [IO.Path]::GetFullPath($script:BinDir).TrimEnd('\')
     foreach ($dir in $env:PATH.Split(';')) {
-        $dir = $dir.Trim('"').TrimEnd('\')
-        if (-not $dir -or $dir -eq $bin) { continue }
+        $dir = $dir.Trim('"')
+        if (-not $dir) { continue }
+        try { if ([IO.Path]::GetFullPath($dir).TrimEnd('\') -eq $bin) { continue } } catch { continue }
+        $dir = $dir.TrimEnd('\')
         foreach ($ext in @('') + $env:PATHEXT.Split(';')) {
             try { if ([IO.File]::Exists([IO.Path]::Combine($dir, $Name + $ext))) { return $true } }
             catch { break }
@@ -213,14 +284,33 @@ function Write-HobFileIfChanged {
 # One file per shell for every command name, in a folder on PATH, so no shell needs any setup: PowerShell
 # prefers name.ps1 and runs it inside the session, cmd runs name.cmd inside the window, and Git Bash runs
 # the extension-less name as a separate process. Startup files are never touched.
+# hob-cli.exe renders the same templates by the same rules (templates\README.md), so whichever of the two
+# last wrote a command, the other sees identical content and leaves it alone.
+function Get-HobShimFiles {
+    param([string]$Name, [string]$Prefix)
+    $values = @{
+        '{{PSM1}}'   = (Join-Path $script:SpikeDir 'hob.psm1').Replace("'", "''")
+        '{{CMD}}'    = Join-Path $script:SpikeDir 'cmd\hob.cmd'
+        '{{SH}}'     = ([regex]::Replace((Join-Path $script:SpikeDir 'bash\hob.sh'), '^([A-Za-z]):', { param($m) "/$($m.Groups[1].Value.ToLowerInvariant())" })).Replace('\', '/').Replace("'", "'\''")
+        '{{PREFIX}}' = $Prefix
+    }
+    $render = {
+        param([string]$Template, [string]$NewLine)
+        $text = [IO.File]::ReadAllText((Join-Path $script:TemplatesDir $Template)).Replace("`r`n", "`n")
+        foreach ($key in $values.Keys) { $text = $text.Replace($key, $values[$key]) }
+        $text.Replace("`n", $NewLine)
+    }
+    @(
+        @{ File = "$Name.ps1"; Text = (& $render 'shim.ps1' "`r`n"); Encoding = (New-Object Text.UTF8Encoding $true) }
+        @{ File = "$Name.cmd"; Text = (& $render 'shim.cmd' "`r`n"); Encoding = (New-Object Text.UTF8Encoding $false) }
+        @{ File = $Name; Text = (& $render 'shim.sh' "`n"); Encoding = (New-Object Text.UTF8Encoding $false) }
+    )
+}
+
 function Write-HobBin {
     param($Model)
     $settings = Get-HobSettings
     $marker = 'Generated by hob; do not edit.'
-    $psm1 = (Join-Path $script:SpikeDir 'hob.psm1').Replace("'", "''")
-    $cmd = Join-Path $script:SpikeDir 'cmd\hob.cmd'
-    $sh = [regex]::Replace((Join-Path $script:SpikeDir 'bash\hob.sh'), '^([A-Za-z]):', { param($m) "/$($m.Groups[1].Value.ToLowerInvariant())" })
-    $sh = $sh.Replace('\', '/').Replace("'", "'\''")
 
     $names = [ordered]@{ hob = '' }
     if ($settings.alias) {
@@ -236,36 +326,12 @@ function Write-HobBin {
     }
 
     if (-not (Test-Path -LiteralPath $script:BinDir)) { [void](New-Item -ItemType Directory -Path $script:BinDir) }
-    $utf8Bom = New-Object Text.UTF8Encoding $true
-    $utf8 = New-Object Text.UTF8Encoding $false
     $keep = @{}
     foreach ($name in $names.Keys) {
-        $prefix = $names[$name]
-        $call = if ($prefix) { "hob $prefix @w" } else { 'hob @w' }
-        $ps1 = @"
-# $marker PowerShell runs scripts found on PATH inside the calling session, which is
-# what lets this move your shell. The completer is declared here so the first Tab in a new window works.
-param(
-    [Parameter(ValueFromRemainingArguments)]
-    [ArgumentCompleter({
-        param(`$commandName, `$parameterName, `$wordToComplete, `$commandAst)
-        `$hobModule = Get-Module hob | Where-Object Path -eq '$psm1'
-        if (-not `$hobModule) { `$hobModule = Import-Module '$psm1' -PassThru }
-        & `$hobModule { param(`$a, `$w, `$p) Get-HobShimCompletion `$a `$w `$p } `$commandAst `$wordToComplete '$prefix'
-    })]
-    [string[]]`$Words
-)
-`$hobModule = Get-Module hob | Where-Object Path -eq '$psm1'
-if (-not `$hobModule) { `$hobModule = Import-Module '$psm1' -PassThru }
-& `$hobModule { param(`$w) $call } `$Words
-exit `$global:LASTEXITCODE
-"@
-        $bat = "@rem $marker cmd runs batch files inside the calling window, which is what lets this move it.`r`n@`"$cmd`" $prefix %*`r`n"
-        $bash = "#!/usr/bin/env bash`n# $marker Git Bash runs this as a separate process, so it cannot change your`n# directory. Use  cd `"`$(hob path <place>)`"  instead.`nsource '$sh'`nhob_main $prefix `"`$@`"`n"
-        Write-HobFileIfChanged (Join-Path $script:BinDir "$name.ps1") $ps1 $utf8Bom
-        Write-HobFileIfChanged (Join-Path $script:BinDir "$name.cmd") $bat $utf8
-        Write-HobFileIfChanged (Join-Path $script:BinDir $name) $bash $utf8
-        foreach ($file in "$name.ps1", "$name.cmd", $name) { $keep[$file] = $true }
+        foreach ($shim in Get-HobShimFiles $name $names[$name]) {
+            Write-HobFileIfChanged (Join-Path $script:BinDir $shim.File) $shim.Text $shim.Encoding
+            $keep[$shim.File] = $true
+        }
     }
 
     # Remove commands for plugins that no longer exist, but only files hob wrote.
@@ -420,6 +486,7 @@ function Write-HobIndex {
         $lines.Add("list|$($place.Qualified)|$($place.Path)")
         $lines.Add("tocomp|$($place.Completion)|$($place.Name)")
     }
+    foreach ($path in @(Get-HobWatchList) + (Join-Path $script:SpikeDir 'hob.psm1')) { $lines.Add("watch|$path|") }
 
     $folder = Split-Path -Parent $script:IndexFile
     if (-not (Test-Path -LiteralPath $folder)) { [void](New-Item -ItemType Directory -Path $folder) }
@@ -509,8 +576,8 @@ function Invoke-HobJump {
 }
 
 function Get-HobHistoryStamp {
-    $item = Get-Item -LiteralPath $script:HistoryFile -ErrorAction SilentlyContinue
-    if (-not $item) { return $null }
+    $item = New-Object IO.FileInfo $script:HistoryFile
+    if (-not $item.Exists) { return $null }
     "$($item.Length)|$($item.LastWriteTimeUtc.Ticks)"
 }
 
@@ -876,6 +943,12 @@ function hob {
                 }
                 'naive' { Invoke-HobNaive $model $resolved.Rest }
                 'recent' { Show-HobRecent $model }
+                'update' {
+                    $cli = Join-Path $script:SpikeDir 'hob-cli.exe'
+                    if (-not (Test-Path -LiteralPath $cli)) { Write-HobError 'this hob runs from a source checkout, so update it with git pull'; return }
+                    & $cli update @($resolved.Rest)
+                    $global:LASTEXITCODE = $LASTEXITCODE
+                }
                 default {
                     $rest = $resolved.Rest
                     $interactive = Test-HobInteractive

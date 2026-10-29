@@ -4,6 +4,20 @@ A throwaway mock for getting a feel for typing `hob`, the short name `hb`, and p
 
 ## Install once
 
+### As a release (Velopack)
+
+```powershell
+.\build\pack.ps1 -Version 0.0.1 -Clean           # builds artifacts\releases\Hob-win-Setup.exe and the update feed
+artifacts\releases\Hob-win-Setup.exe             # installs per-user to %LOCALAPPDATA%\Hob, no admin
+hob update                                       # later: update from github.com/ArcticGizmo/hob releases
+```
+
+This follows the same pattern as tack. `hob-cli.exe` is Velopack's main program: after install and update it writes `hob` and the short name into `%LOCALAPPDATA%\hob-spike\bin` and adds that folder to your user PATH; before uninstall it removes both. It never starts PowerShell to do so, and it records what it did in `%LOCALAPPDATA%\hob-spike\hob-cli.log`. Plugin shortcuts like `nav` appear the first time you run hob in any shell. `hob-cli setup` (and `setup --undo`) repeats the PATH step by hand if anything went wrong; previous PATH values are saved in `path-backups`.
+
+Velopack replaces `%LOCALAPPDATA%\Hob\current` on every update, so nothing of yours lives there. Settings, your plugins and your history stay in `%LOCALAPPDATA%\hob-spike`, and uninstalling leaves them in place. Only the general-purpose `nav` plugin ships; the demo `spike` plugin points into this repository, so it only exists in a checkout.
+
+### From a checkout
+
 ```powershell
 .\spikes\ergonomics\install.ps1                  # hob, hb and plugin shortcuts
 .\spikes\ergonomics\install.ps1 -Alias j         # a different short name
@@ -88,7 +102,28 @@ The picker rows are the raw material for E6: after a couple of weeks, the share 
 
 Top-level names are only built-ins and plugins, so a place can never clash with a command.
 
-Locations come from `plugins/*/plugin.json`. Edits are picked up on the next command. Roots are `{home}`, `{temp}`, `{hob}` (this repo) and `{git}` (defaults to `~/Documents/git`). Override any of them in a gitignored `roots.local.json` next to `hob.psm1`, for example `{ "git": "D:/src" }`.
+### Plugins and settings
+
+hob reads plugins from, in this order (a plugin name found earlier wins, so yours can replace a built-in):
+
+1. each folder listed in `pluginPaths` in your settings, for example a clone of a private plugins repo,
+2. `%LOCALAPPDATA%\hob-spike\plugins`,
+3. the built-in `plugins` folder next to `hob.psm1`.
+
+Each holds one folder per plugin with a `plugin.json`. Edits and new plugins are picked up on the next command in every shell except cmd, which needs `hob reindex`.
+
+`%LOCALAPPDATA%\hob-spike\settings.json`, all keys optional:
+
+```json
+{
+  "alias": "hb",
+  "shortcuts": true,
+  "pluginPaths": ["%USERPROFILE%\\git\\my-hob-plugins"],
+  "roots": { "git": "D:\\src", "proj": "%USERPROFILE%\\work" }
+}
+```
+
+Built-in roots are `{home}`, `{temp}`, `{git}` (defaults to `~/Documents/git`) and, in a checkout only, `{hob}` (this repo). `roots` adds or overrides them; environment variables are expanded in roots and plugin paths.
 
 ## How it works
 
@@ -119,13 +154,13 @@ One action per line, because cmd and bash can split that with builtins but canno
 
 | Action | PowerShell 5.1 | PowerShell 7 | cmd | Git Bash |
 |---|---|---|---|---|
-| First `hob` in a new window | ~430 ms | ~290 ms | ~19 ms | ~150 ms |
-| Jump (`hb to git`) | 22–30 ms | 29–37 ms | ~19 ms | `hob path` ~150 ms |
-| Tab completion | 15–17 ms | 17–19 ms | — | — |
+| First `hob` in a new window | ~410 ms | ~330 ms | ~19 ms | ~150 ms |
+| Jump (`hb to git`) | 25–30 ms | 25–32 ms | ~19 ms | `hob path` ~150 ms |
+| Tab completion | 19–21 ms | 15–18 ms | — | — |
 | Plugin command (`spike hello`, a `.cmd`) | 40–55 ms | 50–60 ms | in-window `call` | ~85 ms |
 | PowerShell plugin command (`spike gitroot`) | 14–20 ms | 22–26 ms | — | — |
 
-About 10 ms of each PowerShell call is PowerShell finding and starting a script from PATH, the price of needing no setup. Git Bash spends about 140 ms just starting a bash process, which only a function defined in `.bashrc` would avoid. The same jumps through a Node child process took 175–300 ms.
+About 10 ms of each PowerShell call is PowerShell finding and starting a script from PATH, the price of needing no setup. The check for changed plugins runs on every command, so it uses .NET file calls directly: PowerShell 7's file cmdlets made it six times slower. Git Bash spends about 140 ms just starting a bash process, which only a function defined in `.bashrc` would avoid. The same jumps through a Node child process took 175–300 ms.
 
 ## Known differences from the real thing
 

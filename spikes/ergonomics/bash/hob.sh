@@ -30,25 +30,35 @@ _hob_windows() {
 
 _hob_err() { printf 'hob: %s\n' "$*" >&2; }
 
-_hob_load() {
-    local index stale= f kind key value
-    _hob_posix "$HOB_INDEX_WIN" index
-    if [[ ! -f $index ]]; then stale=1
-    else
-        for f in "$HOB_SPIKE_DIR"/plugins/*/plugin.json "$HOB_SPIKE_DIR/roots.local.json" "$HOB_SPIKE_DIR/hob.psm1"; do
-            [[ -f $f && $f -nt $index ]] && stale=1
-        done
-    fi
-    if [[ -n $stale ]]; then
-        local psm1
-        _hob_windows "$HOB_SPIKE_DIR/hob.psm1" psm1
-        _hob_err 'building the index with PowerShell (only when plugins change)...'
-        powershell.exe -NoProfile -Command "Import-Module '$psm1'; [void](& (Get-Module hob) { Get-HobModel })" > /dev/null
-        [[ -f $index ]] || { _hob_err 'could not build the index'; return 1; }
-    fi
+_hob_build() {
+    local psm1
+    _hob_windows "$HOB_SPIKE_DIR/hob.psm1" psm1
+    _hob_err 'building the index with PowerShell (only when plugins change)...'
+    powershell.exe -NoProfile -Command "Import-Module '$psm1'; [void](& (Get-Module hob) { Get-HobModel })" > /dev/null
+    [[ -f $1 ]] || { _hob_err 'could not build the index'; return 1; }
+}
 
+# The index lists what it was built from (settings, plugin folders, manifests, the module) as watch lines,
+# so plugins added anywhere hob looks are noticed without bash having to read settings.json itself.
+_hob_load() {
+    local index f
+    _hob_posix "$HOB_INDEX_WIN" index
+    if [[ ! -f $index ]]; then _hob_build "$index" || return 1; fi
+    _hob_read_index "$index"
+    for f in "${HOB_WATCH[@]}"; do
+        _hob_posix "$f" f
+        if [[ -e $f && $f -nt $index ]]; then
+            _hob_build "$index" || return 1
+            _hob_read_index "$index"
+            break
+        fi
+    done
+}
+
+_hob_read_index() {
+    local kind key value
     declare -gA HOB_TO=() HOB_TO_AMBIG=() HOB_PLUG=() HOB_PLUG_AMBIG=() HOB_ROOT=() HOB_GO=() HOB_RUN=() HOB_CHILD_AMBIG=() HOB_SUB=()
-    HOB_TOP=() HOB_LIST=()
+    HOB_TOP=() HOB_LIST=() HOB_WATCH=()
     while IFS='|' read -r kind key value; do
         case $kind in
             top) HOB_TOP+=("$key") ;;
@@ -62,8 +72,9 @@ _hob_load() {
             run) HOB_RUN[$key]=$value ;;
             'child?') HOB_CHILD_AMBIG[$key]=$value ;;
             list) HOB_LIST+=("$key|$value") ;;
+            watch) HOB_WATCH+=("$key") ;;
         esac
-    done < "$index"
+    done < "$1"
 }
 
 _hob_record() {
@@ -203,6 +214,10 @@ hob_main() {
         path) shift; _hob_path "$@" ;;
         back) _hob_err 'Git Bash runs hob as a separate program, so there is no jump to go back from. Use  cd -  instead.'; return 2 ;;
         recent | naive) _hob_err "'$1' is PowerShell-only in this spike"; return 1 ;;
+        update)
+            shift
+            [[ -f $HOB_SPIKE_DIR/hob-cli.exe ]] || { _hob_err 'this hob runs from a source checkout, so update it with git pull'; return 1; }
+            "$HOB_SPIKE_DIR/hob-cli.exe" update "$@" ;;
         *) _hob_plugin "$@" ;;
     esac
 }
