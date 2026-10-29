@@ -1,0 +1,28 @@
+{
+  "name": "spike",
+  "description": "The hob repo itself",
+  "root": "{hob}",
+  "locations": {
+    "docs": "docs",
+    "ergo": "spikes/ergonomics",
+    "plugins": "spikes/ergonomics/plugins"
+  },
+  "commands": {
+    "hello": {
+      "description": "Say hello from a child process",
+      "run": ["{plugin}\\commands\\hello.cmd"]
+    },
+    "mkcd": {
+      "description": "Make a scratch folder in temp and jump into it",
+      "run": ["{plugin}\\commands\\mkcd.cmd"]
+    },
+    "gitroot": {
+      "description": "Jump to the root of the git repository you are in (PowerShell, runs in your session)",
+      "run": ["{plugin}\\commands\\gitroot.ps1"]
+    },
+    "stamp": {
+      "description": "Set $env:HOB_STAMP in your shell to the current time",
+      "run": ["{plugin}\\commands\\stamp.cmd"]
+    }
+  }
+}

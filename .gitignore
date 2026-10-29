@@ -1,2 +1,8 @@
 # Contains work project structure
 docs/scope.md
+docs/private/
+
+# Build output
+bin/
+obj/
+artifacts/

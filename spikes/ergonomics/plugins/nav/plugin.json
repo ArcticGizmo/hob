@@ -1,0 +1,11 @@
+{
+  "name": "nav",
+  "description": "Everyday places",
+  "locations": {
+    "home": "{home}",
+    "docs": "{home}/Documents",
+    "downloads": "{home}/Downloads",
+    "git": "{git}",
+    "temp": "{temp}"
+  }
+}

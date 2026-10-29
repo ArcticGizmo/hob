@@ -1,0 +1,4 @@
+# cmd.exe miscounts label offsets in batch files with LF endings, so goto and call :label jump to the wrong line.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.sh text eol=lf
