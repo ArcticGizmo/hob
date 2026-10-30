@@ -11,7 +11,8 @@ internal sealed record HobPaths(string AppDir, string DataDir, string BinDir, st
 {
     public static HobPaths FromEnvironment()
     {
-        string data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "hob-spike");
+        // Not LOCALAPPDATA\hob: that is Velopack's install folder, which uninstall deletes outright.
+        string data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".hob");
         string settings = Env("HOB_SPIKE_SETTINGS") ?? Path.Combine(data, "settings.json");
         return new HobPaths(
             Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory),

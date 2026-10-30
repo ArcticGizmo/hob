@@ -20,9 +20,9 @@ $script:Builtins = [ordered]@{
 }
 $script:PlaceBuiltins = @('to', 'cd', 'path', 'naive')
 $script:SettingsFile = $env:HOB_SPIKE_SETTINGS
-if (-not $script:SettingsFile) { $script:SettingsFile = Join-Path $env:LOCALAPPDATA 'hob-spike\settings.json' }
+if (-not $script:SettingsFile) { $script:SettingsFile = Join-Path $env:USERPROFILE '.hob\settings.json' }
 $script:BinDir = $env:HOB_SPIKE_BIN
-if (-not $script:BinDir) { $script:BinDir = Join-Path $env:LOCALAPPDATA 'hob-spike\bin' }
+if (-not $script:BinDir) { $script:BinDir = Join-Path $env:USERPROFILE '.hob\bin' }
 $script:UserPluginsDir = Join-Path (Split-Path -Parent $script:SettingsFile) 'plugins'
 $script:ForceWrite = $false
 # A file on PATH cannot shadow these: cmd runs its built-in commands first.
@@ -32,12 +32,12 @@ $script:CmdInternal = @('assoc', 'break', 'call', 'cd', 'chdir', 'cls', 'color',
 $script:ReadKey = { [Console]::ReadKey($true) }
 # Machine-local and outside the repo: it records where you go, which is nobody else's business.
 $script:HistoryFile = $env:HOB_SPIKE_HISTORY
-if (-not $script:HistoryFile) { $script:HistoryFile = Join-Path $env:LOCALAPPDATA 'hob-spike\history.tsv' }
+if (-not $script:HistoryFile) { $script:HistoryFile = Join-Path $env:USERPROFILE '.hob\history.tsv' }
 $script:History = @{}
 $script:HistoryStamp = $null
 $script:HistoryWarned = $false
 $script:IndexFile = $env:HOB_SPIKE_INDEX
-if (-not $script:IndexFile) { $script:IndexFile = Join-Path $env:LOCALAPPDATA 'hob-spike\index.txt' }
+if (-not $script:IndexFile) { $script:IndexFile = Join-Path $env:USERPROFILE '.hob\index.txt' }
 $script:IndexWarned = $false
 $script:EnvNamePattern = '^[A-Za-z_][A-Za-z0-9_]*$'
 # Refused in every shell for consistency: bash runs or re-reads these, which would turn a value into code.
