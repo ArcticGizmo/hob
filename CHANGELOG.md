@@ -16,7 +16,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `hob list` removed, since `hob` already says everything; `hob naive` retired with honours
 - `to, cd` listed on one line, as befits two names for one thing
 - PowerShell plugin commands run in cmd and Git Bash too (in a child PowerShell, so they can't move your shell)
-- `HOB_HOME` replaces the four `HOB_SPIKE_*` variables
+- `HOB_HOME` moves the whole data folder, replacing four separate override variables
 
 ---
 
@@ -24,7 +24,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - One-line install with `irm | iex` (read it first; we did)
 - Installer down from 40.6 MB to 16.7 MB
-- Data moved to `%USERPROFILE%\.hob`; old `hob-spike` folders are not migrated (it was a spike; it knew the risks)
+- Data moved to `%USERPROFILE%\.hob`; the 0.1.0 data folder is not migrated (it knew the risks)
 - hob has an icon in Settings > Apps
 - A README
 

@@ -14,7 +14,7 @@ Branch `feat/exe-core`. Started 2026-10-30 from user feedback on v0.1.1.
 | 6 | `hob nav` is redundant with `hob to` | The `nav` plugin is gone; its places are seeded into your own place list |
 | 7 | No way to add/remove/tweak `to` targets | `hob to --add <name> [path]`, `hob to --rm <name>`, stored in `%USERPROFILE%\.hob\places.json` |
 | 8 | Built-in places should be seeded, not maintained | `places.json` is created once with home, docs, downloads, git and temp; after that it is yours, and deleting entries sticks |
-| - | `hob naive` | Removed (spike demo) |
+| - | `hob naive` | Removed (a demo of a child process failing to cd) |
 
 ## Architecture
 
@@ -41,7 +41,7 @@ Every process start costs 50-100 ms on this EDR-scanned machine (measured: empty
 
 ### Data folder
 
-`%USERPROFILE%\.hob`, or `HOB_HOME` for tests: `settings.json`, `places.json`, `plugins\`, `bin\`, `index.txt`, `history.tsv`. `HOB_PATH_KEY` still redirects PATH edits to a throwaway registry key. The `HOB_SPIKE_*` variables are gone.
+`%USERPROFILE%\.hob`, or `HOB_HOME` for tests: `settings.json`, `places.json`, `plugins\`, `bin\`, `index.txt`, `history.tsv`. `HOB_PATH_KEY` still redirects PATH edits to a throwaway registry key. It replaces the four separate per-file override variables.
 
 ## Layout
 
