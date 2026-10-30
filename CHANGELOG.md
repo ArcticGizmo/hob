@@ -7,16 +7,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-- hob's brain moved into `hob-cli.exe`; the shell scripts now only do the jumping, which is the bit they're good at
-- The picker, `recent` and every error message now work the same in cmd and Git Bash as in PowerShell
-- Your own places: `hob to --add <name> [folder]`, `hob to --rm <name>`, kept in `%USERPROFILE%\.hob\places.json`
-- The `nav` plugin is gone; its places are now starter places you're free to delete (they won't come back)
-- `hob --version` / `hob -v`, and `hob --help` / `hob -h`
-- `hob` and `hb` on their own no longer claim to be ambiguous in PowerShell
-- `hob list` removed, since `hob` already says everything; `hob naive` retired with honours
-- `to, cd` listed on one line, as befits two names for one thing
-- PowerShell plugin commands run in cmd and Git Bash too (in a child PowerShell, so they can't move your shell)
-- `HOB_HOME` moves the whole data folder, replacing four separate override variables
+---
+
+## [v0.2.0] - 2026-10-30
+
+- Your own places: `hob to --add <name> [folder]`, `hob to --rm <name>`
+- `nav` plugin retired; its places are now starters you can delete (they stay deleted)
+- Picker, `recent` and place management work in cmd and Git Bash
+- Same error messages in every shell (there is only one copy now)
+- `hob --version` / `-v` and `hob --help` / `-h`
+- `hob` and `hb` alone no longer claim to be ambiguous
+- `hob list` removed; `hob` was already saying everything
+- `hob naive` retired with honours
+- `to, cd` share one line, as befits one command
+- PowerShell plugin commands run in cmd and Git Bash (no moving your shell there)
+- `HOB_HOME` moves the whole data folder
 
 ---
 
