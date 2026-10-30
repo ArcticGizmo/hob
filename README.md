@@ -159,7 +159,7 @@ Releases are made by pushing a version tag. GitHub Actions builds and publishes 
    ```
 2. [`release.yml`](.github/workflows/release.yml) runs [`build/pack.ps1`](build/pack.ps1) on Windows with the tag's version, then the `release` job collects every file into one folder, writes `SHA256SUMS.txt` over it, and publishes the GitHub release.
 
-The version comes from the tag, so there is nothing to bump in the project files.
+The version comes from the tag, so there is nothing to bump in the project files. Each release gets a section in [`CHANGELOG.md`](CHANGELOG.md). In Claude Code, `/bump-version` writes the next section from the commits since the last tag, and `/release-next-version` packs locally, PRs and squash-merges the branch, tags `main` with the version from that section, and watches the release build.
 
 The release job fails rather than publish if two files share a name, or if `Hob-win-Setup.exe` is missing, because `install.ps1` finds that file by name. `SHA256SUMS.txt` is written from the exact files being uploaded, so it can't drift from what people download.
 
