@@ -31,9 +31,9 @@ Every process start costs 50-100 ms on this EDR-scanned machine (measured: empty
 
 | Kind | Key | Value | Used by |
 |---|---|---|---|
-| `to` | place query (`git`, `gi`, `spike docs`, `sp d`) | folder | `to` / `cd` / `path` fast path |
-| `go` | plugin words (`spike`, `sp docs`) | folder | plugin root / location jump |
-| `run` | plugin + command (`spike hello`) | program, then plugin folder | plugin command |
+| `to` | place query (`git`, `gi`, `demo docs`, `de d`) | folder | `to` / `cd` / `path` fast path |
+| `go` | plugin words (`demo`, `de docs`) | folder | plugin root / location jump |
+| `run` | plugin + command (`demo hello`) | program, then plugin folder | plugin command |
 | `top` | name | description | PowerShell completion |
 | `sub` | plugin | child, then description | PowerShell completion |
 | `tocomp` | completion text | folder | PowerShell completion |
@@ -49,7 +49,7 @@ Every process start costs 50-100 ms on this EDR-scanned machine (measured: empty
 src/Hob.Cli/          the exe
 tests/Hob.Cli.Tests/  xunit
 shell/                hob.psm1, cmd/hob.cmd, bash/hob.sh, templates/  (copied next to the exe)
-examples/plugins/     the demo `spike` plugin (not shipped; add to pluginPaths)
+examples/plugins/     the `demo` plugin (not shipped; add to pluginPaths)
 build/pack.ps1        release; build/dev.ps1 stages a checkout build to artifacts/dev
 ```
 

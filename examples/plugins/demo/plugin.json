@@ -1,5 +1,5 @@
 {
-  "name": "spike",
+  "name": "demo",
   "description": "The hob repo itself",
   "root": "{plugin}/../../..",
   "locations": {

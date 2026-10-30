@@ -144,7 +144,7 @@ For a set of places and commands you want to share or keep in git, create a fold
 }
 ```
 
-That gives you `hb to api`, `work web`, `work build`, and the same with tab completion. If one of your own places has the same name as a plugin's, yours wins and the plugin's is `hb to work <name>`. Changes are picked up on your next command, except in cmd, which needs `hob reindex`. [`examples/plugins/spike`](examples/plugins/spike) shows every kind of command.
+That gives you `hb to api`, `work web`, `work build`, and the same with tab completion. If one of your own places has the same name as a plugin's, yours wins and the plugin's is `hb to work <name>`. Changes are picked up on your next command, except in cmd, which needs `hob reindex`. [`examples/plugins/demo`](examples/plugins/demo) shows every kind of command.
 
 `%USERPROFILE%\.hob\settings.json`, all keys optional:
 
