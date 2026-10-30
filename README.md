@@ -1,6 +1,6 @@
 <h1 align="center">hob</h1>
 <p align="center">
- <img src="./landing-icon.png" width="150" />
+ <img src="./hob.svg" width="150" />
 </p>
 
 <p align="center">
