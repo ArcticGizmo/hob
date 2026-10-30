@@ -15,21 +15,23 @@ It replaces the folder of batch files on PATH that most of us end up with. Place
 
 Already know you want it? [Skip the details and install it ▼](#installing)
 
-> **Status: early.** hob is Windows-only for now, and what ships today is the ergonomics spike in [`spikes/ergonomics`](spikes/ergonomics). It works and is used daily, but names, file formats and the data folder may still change.
+> **Status: early.** hob is Windows-only for now. It works and is used daily, but names, file formats and the data folder may still change.
 
 ### At a glance
 
 ```powershell
-hb to git            # jump to a place; prefixes work (hb to gi)
-hb to                # pick from every place, ranked by where you go most
-hb back              # return to where the last jump came from
-hb recent            # places ranked by frecency
-nav downloads        # a plugin's own shortcut: jump to one of its places
-hob path docs        # print a folder instead of going there: code (hob path docs)
-hob                  # list plugins and built-ins
+hb to git                 # jump to a place; prefixes work (hb to gi)
+hb to                     # pick from every place, ranked by where you go most
+hb to --add work          # make the folder you're in a place called work
+hb to --add work D:\src   # ...or point it somewhere else; --rm work removes it
+hb back                   # return to where the last jump came from
+hb recent                 # places ranked by frecency
+hob path docs             # print a folder instead of going there: code (hob path docs)
+hob                       # everything hob knows; hob --version for the version
 ```
 
 - **Moves your actual shell**: no child process trying to `cd` for you. Jumps run inside your PowerShell or cmd session, so they take about 25 ms.
+- **The same in every shell**: the picker, `recent`, place management and every error message work identically in PowerShell, cmd and Git Bash.
 - **One short name**: `hob`, or `hb` for short, plus an optional shortcut per plugin.
 - **A picker that learns**: type a few letters of a place's name, plugin or path. Places you visit often and recently float to the top.
 - **Tab completion** in PowerShell, including in a brand-new window.
@@ -38,7 +40,7 @@ hob                  # list plugins and built-ins
 
 ## How it works
 
-The installer writes a folder of small commands, `hob.ps1`, `hob.cmd` and a bash script for each name, and adds that one folder to your **user** PATH. Each shell picks the file it runs natively:
+`hob-cli.exe` holds all of hob's logic. The installer puts a folder of small commands on your **user** PATH, `hob.ps1`, `hob.cmd` and a bash script for each name, and each shell picks the file it runs natively:
 
 | Shell | Runs | Why it can move your shell |
 | --- | --- | --- |
@@ -46,11 +48,9 @@ The installer writes a folder of small commands, `hob.ps1`, `hob.cmd` and a bash
 | cmd | `hob.cmd` | cmd runs a batch file inside the calling window |
 | Git Bash | `hob` | It can't: bash runs it as a separate process, so you use `cd "$(hob path git)"` |
 
-cmd has no completion, picker or history. Git Bash looks places up and runs plugin commands, but can't jump by itself.
+Those scripts answer jumps from a lookup table the exe writes, so a jump never starts a process. Everything else goes to the exe, which asks the script to move your shell by writing a line like `cd C:\some\folder` to a temporary file. The script applies a fixed set of actions from that file (change directory, set or unset a variable, go back) and ignores anything else. Nothing in it is ever run as code. Plugin commands use the same file.
 
-A plugin command that isn't PowerShell runs as a normal child process. To move your shell, it writes a line like `cd C:\some\folder` to a temporary file hob gives it. hob then applies a fixed set of actions from that file (change directory, set or unset a variable, go back) and ignores anything else. Nothing in it is ever run as code.
-
-The full tour, with timings for each shell, is in [`spikes/ergonomics/README.md`](spikes/ergonomics/README.md).
+Tab completion is PowerShell-only, and cmd doesn't record jumps it answers itself in the history. The full tour, with timings for each shell, is in [`docs/how-it-works.md`](docs/how-it-works.md).
 
 ## Installing
 
@@ -109,11 +109,22 @@ hob update            # download and install the latest release
 hob update --check    # only say whether there is one
 ```
 
-Updates replace `%LOCALAPPDATA%\Hob\current` and regenerate the commands. Nothing of yours lives there, so updates never touch your settings, plugins or history. You never need to run the install script again.
+Updates replace `%LOCALAPPDATA%\Hob\current` and regenerate the commands. Nothing of yours lives there, so updates never touch your settings, places, plugins or history. You never need to run the install script again.
 
-## Your own places and commands
+## Your own places
 
-hob ships with one plugin, `nav`, for everyday places (`home`, `docs`, `downloads`, `git`, `temp`). Add your own by creating a folder per plugin in `%USERPROFILE%\.hob\plugins`, or in a git repo you list in your settings:
+```powershell
+hob to --add work            # the folder you're in
+hob to --add work D:\src     # a folder by path; using a name you already have updates it
+hob to --rm work
+hob to --list
+```
+
+They live in `%USERPROFILE%\.hob\places.json`, which you can also edit by hand. The first time hob runs it fills that file with a few starter places, `home`, `docs`, `downloads`, `git` and `temp`, and never adds them again, so remove any you don't want.
+
+## Plugins
+
+For a set of places and commands you want to share or keep in git, create a folder per plugin in `%USERPROFILE%\.hob\plugins`, or in a git repo you list in your settings:
 
 ```json
 {
@@ -133,7 +144,7 @@ hob ships with one plugin, `nav`, for everyday places (`home`, `docs`, `download
 }
 ```
 
-That gives you `hb to api`, `work web`, `work build`, and the same with tab completion. Changes are picked up on your next command, except in cmd, which needs `hob reindex`.
+That gives you `hb to api`, `work web`, `work build`, and the same with tab completion. If one of your own places has the same name as a plugin's, yours wins and the plugin's is `hb to work <name>`. Changes are picked up on your next command, except in cmd, which needs `hob reindex`. [`examples/plugins/demo`](examples/plugins/demo) shows every kind of command.
 
 `%USERPROFILE%\.hob\settings.json`, all keys optional:
 
@@ -171,23 +182,28 @@ The release job fails rather than publish if two files share a name, or if `Hob-
 .\build\pack.ps1 -Version 0.0.1 -Clean
 ```
 
-This writes `Hob-win-Setup.exe` and the update feed to `artifacts\releases`. The `vpk` packaging tool is pinned in `dotnet-tools.json` and restored for you. `-Clean` starts the feed over, since vpk won't pack a version that isn't newer than one already there.
+This writes `Hob-win-Setup.exe` and the update feed to `artifacts\releases`. The `vpk` packaging tool is pinned in `dotnet-tools.json` and restored for you. `-Clean` starts the feed over, since vpk won't pack a version that isn't newer than one already there. `-Aot` builds `hob-cli.exe` with Native AOT for faster startup; it needs the MSVC build tools.
 
 ## Development
 
 Requirements: .NET 10 SDK, and Windows PowerShell 5.1 and PowerShell 7 for testing.
 
-To try hob from a checkout without building anything:
+To run hob from a checkout:
 
 ```powershell
-.\spikes\ergonomics\install.ps1      # adds the checkout's commands to your user PATH
-.\spikes\ergonomics\uninstall.ps1    # undo
+.\build\dev.ps1 -Setup                       # builds into artifacts\dev and puts its commands on your user PATH
+.\artifacts\dev\hob-cli.exe setup --undo     # undo
+dotnet test tests\Hob.Cli.Tests              # unit tests
 ```
+
+Rerun `.\build\dev.ps1` after changing the exe or the shell scripts. To try it without touching your real PATH or data folder, see [Testing without touching your machine](docs/how-it-works.md#testing-without-touching-your-machine).
 
 | Path | What it is |
 | --- | --- |
-| `spikes/ergonomics/hob.psm1` | The core: plugin discovery, matching, picker, history, directives |
-| `spikes/ergonomics/cmd`, `bash` | The cmd and Git Bash adapters |
-| `spikes/ergonomics/templates` | The per-name scripts written into the commands folder |
-| `src/Hob.Cli` | `hob-cli.exe`: Velopack's install, update and uninstall hooks, `setup` and `update` |
+| `src/Hob.Cli` | `hob-cli.exe`: everything hob knows, plus Velopack's install, update and uninstall hooks |
+| `shell/hob.psm1`, `shell/cmd`, `shell/bash` | The PowerShell, cmd and Git Bash wrappers: answer jumps from the index, hand the rest to the exe |
+| `shell/templates` | The per-name scripts written into the commands folder |
+| `tests/Hob.Cli.Tests` | Unit tests |
+| `examples/plugins` | A demo plugin with one of each kind of command; add the folder to `pluginPaths` to try it |
+| `build` | `pack.ps1` (release), `dev.ps1` (checkout build) |
 | `install.ps1` | The checksum-verifying web installer |

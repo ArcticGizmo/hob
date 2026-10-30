@@ -10,6 +10,11 @@ param(
     })]
     [string[]]$Words
 )
+# The completer makes this an advanced script, so PowerShell takes a typed -v as its own -Verbose.
+if ($PSBoundParameters.ContainsKey('Verbose')) {
+    $Words = @('-v') + $Words
+    $VerbosePreference = 'SilentlyContinue'
+}
 $hobModule = Get-Module hob | Where-Object Path -eq '{{PSM1}}'
 if (-not $hobModule) { $hobModule = Import-Module '{{PSM1}}' -PassThru }
 & $hobModule { param($w) hob {{PREFIX}} @w } $Words

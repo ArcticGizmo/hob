@@ -9,11 +9,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v0.2.0] - 2026-10-30
+
+- Your own places: `hob to --add <name> [folder]`, `hob to --rm <name>`
+- `nav` plugin retired; its places are now starters you can delete (they stay deleted)
+- Picker, `recent` and place management work in cmd and Git Bash
+- Same error messages in every shell (there is only one copy now)
+- `hob --version` / `-v` and `hob --help` / `-h`
+- `hob` and `hb` alone no longer claim to be ambiguous
+- `hob list` removed; `hob` was already saying everything
+- `hob naive` retired with honours
+- `to, cd` share one line, as befits one command
+- PowerShell plugin commands run in cmd and Git Bash (no moving your shell there)
+- `HOB_HOME` moves the whole data folder
+
+---
+
 ## [v0.1.1] - 2026-10-30
 
 - One-line install with `irm | iex` (read it first; we did)
 - Installer down from 40.6 MB to 16.7 MB
-- Data moved to `%USERPROFILE%\.hob`; old `hob-spike` folders are not migrated (it was a spike; it knew the risks)
+- Data moved to `%USERPROFILE%\.hob`; the 0.1.0 data folder is not migrated (it knew the risks)
 - hob has an icon in Settings > Apps
 - A README
 
