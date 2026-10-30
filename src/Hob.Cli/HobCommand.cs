@@ -36,7 +36,7 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
                 switch (builtin.AliasOf ?? builtin.Name)
                 {
                     case "to": return To(rest, printOnly: false);
-                    case "path": return To(rest, printOnly: true);
+                    case "places": return Places(rest);
                     case "back": return Back();
                     case "recent": return Recent();
                     case "update": return await Update(rest.Contains("--check"));
@@ -56,39 +56,30 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
 
     private int To(List<string> rest, bool printOnly)
     {
-        if (rest.Count > 0 && rest[0].StartsWith('-'))
-        {
-            return rest[0] switch
-            {
-                "--add" or "-a" => AddPlace(rest.Skip(1).ToList()),
-                "--rm" or "--remove" => RemovePlace(rest.Skip(1).ToList()),
-                "--list" or "-l" => ListPlaces(),
-                _ => Fail($"unknown option '{rest[0]}'. Try --add, --rm or --list."),
-            };
-        }
-
-        // Bash cannot be moved by a separate program, so `to` there explains the `cd "$(hob path)"` form.
+        // Bash cannot be moved by a separate program, so `to` there explains the `cd "$(hob places ...)"` form.
         if (Bash && !printOnly)
         {
             if (rest.Count == 0) return ListPlaces();
-            stderr.WriteLine($"hob: Git Bash runs hob as a separate program, so it cannot move your shell. Use:  cd \"$(hob path {string.Join(' ', rest)})\"");
+            stderr.WriteLine($"hob: Git Bash runs hob as a separate program, so it cannot move your shell. Use:  cd \"$(hob places {string.Join(' ', rest)})\"");
             return 2;
         }
 
         var match = rest.Count is 1 or 2 ? Matcher.FindPlace(_model, rest) : new Match<Place>(null, []);
         if (match.Entry is not null) return Go(match.Entry, printOnly, "to");
 
+        // Only a bare `to`, or a name that fits several places, opens the picker. A name that fits nothing is an
+        // error, so a typo never looks the same as a search.
         string query = string.Join(' ', rest);
+        if (rest.Count > 0 && match.Candidates.Count < 2) return Fail($"no place called '{query}'. 'hob places' lists them all.");
+
         using var term = OpenTerminal();
         if (term is null)
         {
-            if (rest.Count == 0) return printOnly ? Fail("usage: hob path <place>") : ListPlaces();
-            if (match.Candidates.Count > 1)
-                return Fail($"'{query}' could be: {string.Join(", ", match.Candidates.Select(c => c.Qualified))}. Be more specific, for example '{Verb(printOnly)} {match.Candidates[0].Qualified}'.");
-            return Fail($"no place called '{query}'. 'hob to --list' shows them all.");
+            if (rest.Count == 0) return ListPlaces();
+            return Fail($"'{query}' could be: {string.Join(", ", match.Candidates.Select(c => c.Qualified))}. Be more specific, for example '{Verb(printOnly)} {match.Candidates[0].Qualified}'.");
         }
 
-        if (_model.Places.Count == 0) return Fail("there are no places yet. Add one with: hob to --add <name> [folder]");
+        if (_model.Places.Count == 0) return Fail("there are no places yet. Add one with: hob places add <name> [folder]");
         var history = History.Load(paths.HistoryFile);
         long now = DateTime.UtcNow.Ticks;
         var pick = Picker.Show(term, _model.Places, query, q => Ranking.Match(_model.Places, q, history, now));
@@ -107,7 +98,7 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
         }
         if (Bash)
         {
-            stderr.WriteLine($"hob: Git Bash runs hob as a separate program, so it cannot move your shell. Use:  cd \"$(hob path {place.Qualified})\"");
+            stderr.WriteLine($"hob: Git Bash runs hob as a separate program, so it cannot move your shell. Use:  cd \"$(hob places {place.Qualified})\"");
             return 2;
         }
         if (!Directive($"cd {place.Path}")) return 1;
@@ -132,11 +123,24 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
         return true;
     }
 
+    private int Places(List<string> rest)
+    {
+        if (rest.Count == 0) return ListPlaces();
+        var args = rest.Skip(1).ToList();
+        return rest[0].ToLowerInvariant() switch
+        {
+            "add" => AddPlace(args),
+            "rm" or "remove" => RemovePlace(args),
+            _ => To(rest, printOnly: true),
+        };
+    }
+
     private int AddPlace(List<string> args)
     {
-        if (args.Count is 0 or > 2) return Fail("usage: hob to --add <name> [folder]   (the folder defaults to where you are)");
+        if (args.Count is 0 or > 2) return Fail("usage: hob places add <name> [folder]   (the folder defaults to where you are)");
         string name = args[0];
         if (!PlaceStore.ValidName().IsMatch(name)) return Fail($"'{name}' can't be a place name: use letters, digits, '.', '_' and '-', starting with a letter or digit");
+        if (Model.PlaceVerbs.Contains(name, StringComparer.OrdinalIgnoreCase)) return Fail($"'{name}' can't be a place name: 'hob places {name}' already means something");
         string folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(args.Count == 2 ? Environment.ExpandEnvironmentVariables(args[1]) : CurrentDirectory, CurrentDirectory));
         if (!Directory.Exists(folder)) return Fail($"{folder} is not a folder");
 
@@ -158,7 +162,7 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
 
     private int RemovePlace(List<string> args)
     {
-        if (args.Count != 1) return Fail("usage: hob to --rm <name>");
+        if (args.Count != 1) return Fail("usage: hob places rm <name>");
         var places = _model.UserPlaces;
         int index = places.FindIndex(p => p.Key.Equals(args[0], StringComparison.OrdinalIgnoreCase));
         if (index < 0)
@@ -268,8 +272,8 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
     private int ListPlaces()
     {
         stdout.WriteLine(Bash
-            ? "Places: cd \"$(hob path <name>)\".  Yours: hob to --add <name> [folder], hob to --rm <name>"
-            : "Places: hob to <name>.  Yours: hob to --add <name> [folder], hob to --rm <name>");
+            ? "Places: cd \"$(hob places <name>)\".  Yours: hob places add <name> [folder], hob places rm <name>"
+            : "Places: hob to <name>.  Yours: hob places add <name> [folder], hob places rm <name>");
         if (_model.Places.Count == 0) stdout.WriteLine("  (none yet)");
         int width = _model.Places.Count == 0 ? 0 : Math.Min(24, _model.Places.Max(p => p.Qualified.Length) + 2);
         foreach (var place in _model.Places) stdout.WriteLine($"  {place.Qualified.PadRight(width)}{place.Path}");
@@ -289,8 +293,8 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
         foreach (var (name, detail) in rows) stdout.WriteLine($"  {name.PadRight(width)}{detail}");
     }
 
-    private string JumpHint(string place) => Bash ? $"cd \"$(hob path {place})\"" : $"hob to {place}";
-    private static string Verb(bool printOnly) => printOnly ? "hob path" : "hob to";
+    private string JumpHint(string place) => Bash ? $"cd \"$(hob places {place})\"" : $"hob to {place}";
+    private static string Verb(bool printOnly) => printOnly ? "hob places" : "hob to";
 
     private int Print(string text)
     {

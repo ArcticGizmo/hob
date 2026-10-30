@@ -9,6 +9,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v0.2.1] - 2026-10-30
+
+- Manage places with `hob places add <name> [folder]` and `hob places rm <name>`
+- `hob places` lists them; `hob places <name>` prints its folder
+- `hob to --add`, `--rm` and `--list` removed (flags were hard work)
+- `hob path` retired; Git Bash jumps are `cd "$(hob places git)"`
+- `hob to <typo>` is an error, not a search (they looked identical)
+- `add`, `rm` and `remove` can't be place names (they're taken)
+- Tab after `hob places` offers `add` and `rm`
+
+---
+
 ## [v0.2.0] - 2026-10-30
 
 - Your own places: `hob to --add <name> [folder]`, `hob to --rm <name>`

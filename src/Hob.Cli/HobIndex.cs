@@ -86,7 +86,8 @@ internal static class HobIndex
         }
 
         foreach (var builtin in Model.Builtins) lines.Add($"top|{builtin.Name}|{Clean(builtin.Description)}");
-        foreach (var plugin in model.Plugins)
+        lines.Add("sub|places|add|command|Add or update one of your places: add <name> [folder]");
+        lines.Add("sub|places|rm|command|Remove one of your places: rm <name>");        foreach (var plugin in model.Plugins)
         {
             lines.Add($"top|{plugin.Name}|{Clean(plugin.Description)}");
             foreach (var place in plugin.Locations) lines.Add($"sub|{plugin.Name}|{place.Name}|place|{place.Path}");

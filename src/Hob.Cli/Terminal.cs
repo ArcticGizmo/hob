@@ -13,7 +13,7 @@ internal interface ITerminal : IDisposable
 
 /// <summary>
 /// Draws straight onto the console through <c>CONOUT$</c> with VT sequences, never on stdout, so the picker
-/// still works inside <c>cd "$(hob path)"</c> and <c>for /f</c>, where stdout is captured. Keys come from
+/// still works inside <c>cd "$(hob places d)"</c> and <c>for /f</c>, where stdout is captured. Keys come from
 /// stdin, which is the console in every shell that can show the picker.
 /// </summary>
 internal sealed partial class ConsoleTerminal : ITerminal

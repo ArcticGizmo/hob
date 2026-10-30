@@ -22,11 +22,11 @@ Already know you want it? [Skip the details and install it ▼](#installing)
 ```powershell
 hb to git                 # jump to a place; prefixes work (hb to gi)
 hb to                     # pick from every place, ranked by where you go most
-hb to --add work          # make the folder you're in a place called work
-hb to --add work D:\src   # ...or point it somewhere else; --rm work removes it
+hb places add work        # make the folder you're in a place called work
+hb places add work D:\src # ...or point it somewhere else; places rm work removes it
 hb back                   # return to where the last jump came from
 hb recent                 # places ranked by frecency
-hob path docs             # print a folder instead of going there: code (hob path docs)
+hob places docs           # print a folder instead of going there: code (hob places docs)
 hob                       # everything hob knows; hob --version for the version
 ```
 
@@ -46,7 +46,7 @@ hob                       # everything hob knows; hob --version for the version
 | --- | --- | --- |
 | PowerShell 5.1 and 7 | `hob.ps1` | PowerShell runs a script found on PATH inside the calling session |
 | cmd | `hob.cmd` | cmd runs a batch file inside the calling window |
-| Git Bash | `hob` | It can't: bash runs it as a separate process, so you use `cd "$(hob path git)"` |
+| Git Bash | `hob` | It can't: bash runs it as a separate process, so you use `cd "$(hob places git)"` |
 
 Those scripts answer jumps from a lookup table the exe writes, so a jump never starts a process. Everything else goes to the exe, which asks the script to move your shell by writing a line like `cd C:\some\folder` to a temporary file. The script applies a fixed set of actions from that file (change directory, set or unset a variable, go back) and ignores anything else. Nothing in it is ever run as code. Plugin commands use the same file.
 
@@ -114,10 +114,11 @@ Updates replace `%LOCALAPPDATA%\Hob\current` and regenerate the commands. Nothin
 ## Your own places
 
 ```powershell
-hob to --add work            # the folder you're in
-hob to --add work D:\src     # a folder by path; using a name you already have updates it
-hob to --rm work
-hob to --list
+hob places add work          # the folder you're in
+hob places add work D:\src   # a folder by path; using a name you already have updates it
+hob places rm work
+hob places                   # list them
+hob places work              # print one's folder
 ```
 
 They live in `%USERPROFILE%\.hob\places.json`, which you can also edit by hand. The first time hob runs it fills that file with a few starter places, `home`, `docs`, `downloads`, `git` and `temp`, and never adds them again, so remove any you don't want.

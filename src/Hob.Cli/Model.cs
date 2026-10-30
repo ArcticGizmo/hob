@@ -38,16 +38,22 @@ internal sealed partial class Model
 {
     public static readonly IReadOnlyList<Builtin> Builtins =
     [
-        new("to", "to <place>", "Jump to a place, or pick one. --add <name> [folder], --rm <name>, --list"),
-        new("cd", "cd <place>", "Same as to", AliasOf: "to"),
-        new("path", "path <place>", "Print a place's folder instead of going there, e.g. code (hob path docs)"),
+        new("to", "to [place]", "Jump to a place; on its own, pick one"),
+        new("cd", "cd [place]", "Same as to", AliasOf: "to"),
+        new("places", "places [place|add|rm]", "List places, or print one's folder: code (hob places docs). add <name> [folder], rm <name>"),
         new("back", "back", "Go back to where the last jump came from"),
         new("recent", "recent", "Places ranked by how often and how recently you go there"),
         new("update", "update", "Update hob to the latest release"),
         new("reindex", "reindex", "Rebuild the lookup table, after editing plugins by hand"),
     ];
 
-    public static readonly string[] PlaceBuiltins = ["to", "cd", "path"];
+    public static readonly string[] PlaceBuiltins = ["to", "cd", "places"];
+
+    /// <summary>
+    /// Words after <c>places</c> that manage places rather than name one, so no place may be called them. The
+    /// wrappers repeat this list, so a place that merely starts with one (address) is not answered from the index.
+    /// </summary>
+    public static readonly string[] PlaceVerbs = ["add", "rm", "remove"];
 
     public required HobPaths Paths { get; init; }
     public required Settings Settings { get; init; }
