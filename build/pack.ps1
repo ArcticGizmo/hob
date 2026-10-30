@@ -34,7 +34,7 @@ Push-Location $root
 try {
     dotnet tool restore | Out-Null
     dotnet vpk pack --packId Hob --packTitle hob --packVersion $Version --packDir $publish --mainExe hob-cli.exe `
-        --shortcuts None --outputDir $releases
+        --icon (Join-Path $root 'src\Hob.Cli\hob.ico') --shortcuts None --outputDir $releases
     if ($LASTEXITCODE) { throw 'vpk pack failed' }
 }
 finally { Pop-Location }
