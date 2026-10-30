@@ -119,7 +119,7 @@ function Invoke-HobDirective {
 }
 
 # Runs a program with a fresh directives file, then applies what it asked for. The body's output flows
-# through, so `code (hob path)` still gets a picked folder; the body sets $global:LASTEXITCODE.
+# through, so `code (hob places d)` still gets a picked folder; the body sets $global:LASTEXITCODE.
 function Invoke-HobWithDirectives {
     param([scriptblock]$Body, [string]$PluginDir)
     $file = [IO.Path]::GetTempFileName()
@@ -189,8 +189,11 @@ function Get-HobCompletion {
         return
     }
     $first = Find-HobTop $Index $Words[0]
-    if ($first -in 'to', 'cd', 'path') {
+    if ($first -in 'to', 'cd', 'places') {
         if ($Words.Count -eq 1) {
+            if ($first -eq 'places' -and $Index.Sub.ContainsKey('places')) {
+                foreach ($child in $Index.Sub['places']) { if ($child[0].StartsWith($Partial, $ignoreCase)) { "$($child[0])`t$($child[2])" } }
+            }
             foreach ($place in $Index.ToComp) {
                 $name = @($place[0].Split(' '))[-1]
                 if ($name.StartsWith($Partial, $ignoreCase) -or $place[0].StartsWith($Partial, $ignoreCase)) { "$($place[0])`t$($place[1])" }
@@ -243,11 +246,13 @@ function hob {
             catch { Write-HobError 'nothing to go back to' }
             return
         }
-        if ($verb -in 'to', 'cd', 'path') {
-            if ($rest.Count -and -not $rest[0].StartsWith('-')) {
+        if ($verb -in 'to', 'cd', 'place', 'places') {
+            $printOnly = $verb -in 'place', 'places'
+            # The exe's Model.PlaceVerbs: `places add` manages places even when a place's name starts with "add".
+            if ($rest.Count -and -not $rest[0].StartsWith('-') -and -not ($printOnly -and $rest[0] -in 'add', 'rm', 'remove')) {
                 $path = $index.To[($rest -join ' ')]
                 if ($path -and [IO.Directory]::Exists($path)) {
-                    if ($verb -eq 'path') { $path; Add-HobVisit $path 'path' }
+                    if ($printOnly) { $path; Add-HobVisit $path 'path' }
                     else { Invoke-HobJump $path 'to' }
                     return
                 }

@@ -29,7 +29,8 @@ if /i "%w1%"=="back" if not defined w2 (
 )
 if /i "%w1%"=="to" goto to
 if /i "%w1%"=="cd" goto to
-if /i "%w1%"=="path" goto to
+if /i "%w1%"=="place" goto to
+if /i "%w1%"=="places" goto to
 
 set "key=%w1%"
 if defined w2 set "key=%w1% %w2%"
@@ -52,12 +53,14 @@ goto exe
 if not defined w2 goto exe
 if "%w2:~0,1%"=="-" goto exe
 if defined w4 goto exe
+rem The exe's Model.PlaceVerbs: `places add` manages places even when a place's name starts with "add".
+if /i "%w1:~0,5%"=="place" for %%v in (add rm remove) do if /i "%w2%"=="%%v" goto exe
 set "key=%w2%"
 if defined w3 set "key=%w2% %w3%"
 call :lookup to "%key%"
 if not defined found goto exe
 if not exist "%found%\" goto exe
-if /i not "%w1%"=="path" goto jumpfound
+if /i not "%w1:~0,5%"=="place" goto jumpfound
 setlocal EnableDelayedExpansion
 echo(!found!
 endlocal

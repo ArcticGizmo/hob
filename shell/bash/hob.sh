@@ -1,6 +1,6 @@
 # Git Bash wrapper, sourced by the generated `hob` script on PATH. Git Bash runs that script as a separate
-# process, so it can never change your directory: `hob path` prints a folder for
-#   cd "$(hob path git)"
+# process, so it can never change your directory: `hob places` prints a folder for
+#   cd "$(hob places git)"
 # and everything that would have moved the shell explains that instead. Jumps and plugin commands are looked up
 # in the index hob-cli.exe writes; everything else is handed to the exe. Process launches cost ~70 ms here and
 # MSYS forks for $(...) are not free either, which is why the lookup path uses no command substitution.
@@ -71,7 +71,7 @@ _hob_record() {
 }
 
 _hob_cd_hint() {
-    _hob_err "Git Bash runs hob as a separate program, so it cannot move your shell. Use:  cd \"\$(hob path $*)\""
+    _hob_err "Git Bash runs hob as a separate program, so it cannot move your shell. Use:  cd \"\$(hob places $*)\""
     return 2
 }
 
@@ -134,12 +134,13 @@ hob_main() {
                 _hob_err 'Git Bash runs hob as a separate program, so there is no jump to go back from. Use  cd -  instead.'
                 return 2
             fi ;;
-        to | cd | path)
-            if (( $# == 2 || $# == 3 )) && [[ $2 != -* ]]; then
+        to | cd | place | places)
+            # The exe's Model.PlaceVerbs: `places add` manages places even when a place's name starts with "add".
+            if (( $# == 2 || $# == 3 )) && [[ $2 != -* ]] && ! [[ ${1,,} == place* && ${2,,} =~ ^(add|rm|remove)$ ]]; then
                 key=${*:2}
                 key=${key,,}
                 if [[ -n ${HOB_TO[$key]+x} ]]; then
-                    if [[ ${1,,} != path ]]; then _hob_cd_hint "${@:2}"; return; fi
+                    if [[ ${1,,} != place* ]]; then _hob_cd_hint "${@:2}"; return; fi
                     _hob_posix "${HOB_TO[$key]}" target
                     if [[ -d $target ]]; then
                         printf '%s\n' "$target"

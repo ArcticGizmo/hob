@@ -21,7 +21,7 @@ For each name (`hob`, the short name `hb`, and one per plugin such as `work`) th
 |---|---|---|
 | `hob.ps1` | PowerShell, which prefers it over `hob.cmd` in the same folder | PowerShell runs a script found on PATH inside the calling session. Its completer is declared in the script, so the first Tab in a new window works |
 | `hob.cmd` | cmd | cmd runs a batch file inside the calling window |
-| `hob` | Git Bash | It cannot: Git Bash runs it as a separate process, so bash uses `cd "$(hob path git)"` |
+| `hob` | Git Bash | It cannot: Git Bash runs it as a separate process, so bash uses `cd "$(hob places git)"` |
 
 The exe writes them from `templates\` whenever plugins or settings change. Names that would be hidden by something PowerShell or cmd resolves first (`h` is PowerShell's `Get-History` alias) or by another program on PATH are skipped with a warning.
 
@@ -31,11 +31,11 @@ The exe writes them from `templates\` whenever plugins or settings change. Names
 
 | Kind | Key | Value | Used by |
 |---|---|---|---|
-| `to` | place query: `git`, `gi`, `work api`, `w a` | folder | `to`, `cd`, `path` |
+| `to` | place query: `git`, `gi`, `work api`, `w a` | folder | `to`, `cd`, `places` (except `places add`, `rm` and `remove`) |
 | `go` | plugin words: `work`, `wo api` | folder | plugin root and location jumps |
 | `run` | plugin and command: `work build` | program, then the plugin folder | plugin commands with a single `run` entry |
 | `top` | name | description | PowerShell completion |
-| `sub` | plugin | child, `place` or `command`, then detail | PowerShell completion |
+| `sub` | plugin, or `places` | child, `place` or `command`, then detail | PowerShell completion |
 | `tocomp` | completion text | folder | PowerShell completion |
 | `watch` | file or folder | | staleness check |
 
@@ -75,7 +75,7 @@ A command whose `run` has more than one entry (`["node", "{plugin}\\x.js"]`) is 
 
 ## The picker
 
-`hob to` or `hob path` with no place, or one that matches several, opens the picker when there is a console:
+`hob to` with no place, or `hob to` or `hob places` with one that matches several, opens the picker when there is a console. A place that matches nothing is an error rather than a search, so a typo never looks like one:
 
 ```
 to> docs
@@ -86,7 +86,7 @@ to> docs
 
 Type to filter: each space-separated word must appear in the place's name, plugin or path. Places whose name starts with your first word rank first, then by frecency. Keys: Up/Down or Ctrl+P/Ctrl+N, PageUp/PageDown, Backspace, Ctrl+U to clear, Enter to jump, Esc or Ctrl+C to cancel.
 
-The exe draws it straight onto the console (`CONOUT$`, VT sequences), never on stdout, so it works in PowerShell, cmd, and Git Bash inside `cd "$(hob path)"`. It draws under the prompt and erases itself afterwards. Without a console (input redirected, or Git Bash under mintty) hob prints the candidates instead.
+The exe draws it straight onto the console (`CONOUT$`, VT sequences), never on stdout, so it works in PowerShell, cmd, and Git Bash inside `cd "$(hob places d)"`. It draws under the prompt and erases itself afterwards. Without a console (input redirected, or Git Bash under mintty) hob prints the candidates instead.
 
 ## Places
 
@@ -99,13 +99,13 @@ Your places live in `places.json`:
 }
 ```
 
-hob writes it once, the first time it runs, with `home`, `docs`, `downloads`, `git` and `temp`. After that it is yours: `hob to --add`, `hob to --rm` and hand edits all stick, including deleting the starter places. Values can use roots (`{home}`, `{temp}`, `{git}`, and any in settings) and `%VARIABLES%`.
+hob writes it once, the first time it runs, with `home`, `docs`, `downloads`, `git` and `temp`. After that it is yours: `hob places add`, `hob places rm` and hand edits all stick, including deleting the starter places. `add`, `rm` and `remove` can't be place names, since `hob places add` already means something. Values can use roots (`{home}`, `{temp}`, `{git}`, and any in settings) and `%VARIABLES%`.
 
 When one of your places has the same name as a plugin's, yours wins; the plugin's is still reachable as `hob to <plugin> <name>`.
 
 ## Frecency
 
-Every jump appends one line to `history.tsv`: time, how you got there (`to`, `direct`, `picker` or `path`), the path, and for picker jumps the row you chose and what you had typed. Each visit scores by age, as zoxide does: 4 within the hour, 2 within the day, 0.5 within the week, 0.25 after that. cmd jumps answered from the index are not recorded, because batch has no cheap way to get a timestamp. Set `HOB_NO_HISTORY=1` to stop recording.
+Every jump appends one line to `history.tsv`: time, how you got there (`to`, `direct`, `picker`, or `path` when `hob places` printed it), the path, and for picker jumps the row you chose and what you had typed. Each visit scores by age, as zoxide does: 4 within the hour, 2 within the day, 0.5 within the week, 0.25 after that. cmd jumps answered from the index are not recorded, because batch has no cheap way to get a timestamp. Set `HOB_NO_HISTORY=1` to stop recording.
 
 The picker rows are the raw material for E6: the share of picker jumps on row 0 says how often the ranking already had the right place on top.
 
@@ -115,7 +115,7 @@ On the development machine (CrowdStrike Falcon and Defender), 2026-10-30:
 
 | Action | PowerShell 5.1 | PowerShell 7 | cmd | Git Bash |
 |---|---|---|---|---|
-| Jump answered by the wrapper | ~25-29 ms | ~16 ms | in-window | `hob path` ≈ bash startup (~280 ms in a sandbox here) |
+| Jump answered by the wrapper | ~25-29 ms | ~16 ms | in-window | `hob places` ≈ bash startup (~280 ms in a sandbox here) |
 | Anything through the exe | ~210-250 ms | ~210 ms | ~200 ms | + bash startup |
 
 The exe's time is almost all process and .NET runtime startup; loading settings, places and plugins is a few milliseconds. `build\pack.ps1 -Aot` builds it with Native AOT, which should bring it close to a native program's ~100 ms, but needs the MSVC build tools.
