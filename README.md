@@ -62,7 +62,7 @@ irm https://raw.githubusercontent.com/ArcticGizmo/hob/main/install.ps1 | iex
 
 That's the whole install. Then open a **new** terminal and type `hob`.
 
-No admin rights: hob installs to `%LOCALAPPDATA%\Hob`, and its commands go in `%LOCALAPPDATA%\hob-spike\bin`, which is added to your user PATH. If Windows Terminal was already open, restart it once so new tabs see the PATH change.
+No admin rights: hob installs to `%LOCALAPPDATA%\Hob`, and its commands go in `%USERPROFILE%\.hob\bin`, which is added to your user PATH. If Windows Terminal was already open, restart it once so new tabs see the PATH change.
 
 What the script does, in order: finds the release, downloads `SHA256SUMS.txt` and `Hob-win-Setup.exe`, **checks the installer against the checksums and deletes it rather than run it if they don't match**, runs the installer, then runs `hob-cli setup` so you can see the PATH result. It's [`install.ps1`](install.ps1) in this repo; read it before piping it into your shell, as you should with any installer.
 
@@ -98,9 +98,9 @@ $want = (Select-String -Path SHA256SUMS.txt -Pattern 'Hob-win-Setup.exe').Line.S
 
 ### Uninstalling
 
-Uninstall **hob** from Settings → Apps. That removes the commands folder from your PATH. Your settings, plugins and jump history in `%LOCALAPPDATA%\hob-spike` are left in place; delete that folder to remove them too.
+Uninstall **hob** from Settings → Apps. That removes the commands folder from your PATH. Your settings, plugins and jump history in `%USERPROFILE%\.hob` are left in place; delete that folder to remove them too.
 
-If the PATH step ever goes wrong, `hob-cli setup` repeats it and `hob-cli setup --undo` reverses it. The previous PATH values are saved in `%LOCALAPPDATA%\hob-spike\path-backups`.
+If the PATH step ever goes wrong, `hob-cli setup` repeats it and `hob-cli setup --undo` reverses it. The previous PATH values are saved in `%USERPROFILE%\.hob\path-backups`.
 
 ## Updating
 
@@ -113,7 +113,7 @@ Updates replace `%LOCALAPPDATA%\Hob\current` and regenerate the commands. Nothin
 
 ## Your own places and commands
 
-hob ships with one plugin, `nav`, for everyday places (`home`, `docs`, `downloads`, `git`, `temp`). Add your own by creating a folder per plugin in `%LOCALAPPDATA%\hob-spike\plugins`, or in a git repo you list in your settings:
+hob ships with one plugin, `nav`, for everyday places (`home`, `docs`, `downloads`, `git`, `temp`). Add your own by creating a folder per plugin in `%USERPROFILE%\.hob\plugins`, or in a git repo you list in your settings:
 
 ```json
 {
@@ -135,7 +135,7 @@ hob ships with one plugin, `nav`, for everyday places (`home`, `docs`, `download
 
 That gives you `hb to api`, `work web`, `work build`, and the same with tab completion. Changes are picked up on your next command, except in cmd, which needs `hob reindex`.
 
-`%LOCALAPPDATA%\hob-spike\settings.json`, all keys optional:
+`%USERPROFILE%\.hob\settings.json`, all keys optional:
 
 ```json
 {
@@ -146,7 +146,7 @@ That gives you `hb to api`, `work web`, `work build`, and the same with tab comp
 }
 ```
 
-Every jump is recorded in `%LOCALAPPDATA%\hob-spike\history.tsv` to rank the picker. Set `$env:HOB_NO_HISTORY = 1` to stop recording, or delete the file to start over.
+Every jump is recorded in `%USERPROFILE%\.hob\history.tsv` to rank the picker. Set `$env:HOB_NO_HISTORY = 1` to stop recording, or delete the file to start over.
 
 ## Building a release (maintainers)
 

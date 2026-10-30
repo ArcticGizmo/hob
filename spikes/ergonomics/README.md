@@ -14,9 +14,9 @@ hob update                                       # later: update from github.com
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds with the same `pack.ps1` and publishes a GitHub release with `SHA256SUMS.txt`. To install a published release, use the one-liner in the root [README](../../README.md#installing); it verifies `Hob-win-Setup.exe` against the checksums before running it.
 
-This follows the same pattern as tack. `hob-cli.exe` is Velopack's main program: after install and update it writes `hob` and the short name into `%LOCALAPPDATA%\hob-spike\bin` and adds that folder to your user PATH; before uninstall it removes both. It never starts PowerShell to do so, and it records what it did in `%LOCALAPPDATA%\hob-spike\hob-cli.log`. Plugin shortcuts like `nav` appear the first time you run hob in any shell. `hob-cli setup` (and `setup --undo`) repeats the PATH step by hand if anything went wrong; previous PATH values are saved in `path-backups`.
+This follows the same pattern as tack. `hob-cli.exe` is Velopack's main program: after install and update it writes `hob` and the short name into `%USERPROFILE%\.hob\bin` and adds that folder to your user PATH; before uninstall it removes both. It never starts PowerShell to do so, and it records what it did in `%USERPROFILE%\.hob\hob-cli.log`. Plugin shortcuts like `nav` appear the first time you run hob in any shell. `hob-cli setup` (and `setup --undo`) repeats the PATH step by hand if anything went wrong; previous PATH values are saved in `path-backups`.
 
-Velopack replaces `%LOCALAPPDATA%\Hob\current` on every update, so nothing of yours lives there. Settings, your plugins and your history stay in `%LOCALAPPDATA%\hob-spike`, and uninstalling leaves them in place. Only the general-purpose `nav` plugin ships; the demo `spike` plugin points into this repository, so it only exists in a checkout.
+Velopack replaces `%LOCALAPPDATA%\Hob\current` on every update, so nothing of yours lives there. Settings, your plugins and your history stay in `%USERPROFILE%\.hob`, and uninstalling leaves them in place. Only the general-purpose `nav` plugin ships; the demo `spike` plugin points into this repository, so it only exists in a checkout.
 
 ### From a checkout
 
@@ -28,7 +28,7 @@ Velopack replaces `%LOCALAPPDATA%\Hob\current` on every update, so nothing of yo
 .\spikes\ergonomics\uninstall.ps1                # undo; add -History to delete your jump history too
 ```
 
-The installer writes a folder of small commands to `%LOCALAPPDATA%\hob-spike\bin` and adds it to your user PATH. That is the only change outside hob's own folders. It never touches `$PROFILE`, `.bashrc` or cmd's AutoRun, and nothing has to run in each new terminal. New terminals pick it up straight away; Windows Terminal hands new tabs the environment it started with, so restart it once if a new tab cannot find `hob`.
+The installer writes a folder of small commands to `%USERPROFILE%\.hob\bin` and adds it to your user PATH. That is the only change outside hob's own folders. It never touches `$PROFILE`, `.bashrc` or cmd's AutoRun, and nothing has to run in each new terminal. New terminals pick it up straight away; Windows Terminal hands new tabs the environment it started with, so restart it once if a new tab cannot find `hob`.
 
 ### Why a folder of commands works without any setup
 
@@ -81,7 +81,7 @@ spike hello                 # plugin commands run; if one asks to move or set a 
 
 Anything that would have moved the shell (`hb to git`, `spike docs`, `hb back`) explains the `cd` form instead. There is no completion in bash.
 
-Both read `%LOCALAPPDATA%\hob-spike\index.txt`, which `hob.psm1` writes whenever the manifests change. It lists every spelling hob accepts, already resolved, so the other shells look keys up instead of reimplementing the matching. If it is missing or older than a manifest, bash rebuilds it automatically by running PowerShell once; in cmd, run `hob reindex`. See `docs/experiments/03-directives-across-shells.md` for timings and the hostile-input results.
+Both read `%USERPROFILE%\.hob\index.txt`, which `hob.psm1` writes whenever the manifests change. It lists every spelling hob accepts, already resolved, so the other shells look keys up instead of reimplementing the matching. If it is missing or older than a manifest, bash rebuilds it automatically by running PowerShell once; in cmd, run `hob reindex`. See `docs/experiments/03-directives-across-shells.md` for timings and the hostile-input results.
 
 ### The picker
 
@@ -96,7 +96,7 @@ Type to filter: each space-separated word must appear in the place's name, plugi
 
 ### Frecency
 
-Every jump appends one line to `%LOCALAPPDATA%\hob-spike\history.tsv`, outside the repo: time, how you got there (`to`, `picker`, `direct` or `path`), the path, and for picker jumps the row you chose and what you had typed. Each visit scores by age, as zoxide does: 4 within the hour, 2 within the day, 0.5 within the week, 0.25 after that. The picker sorts by that score, so after a few days `hb to` then Enter usually lands where you meant.
+Every jump appends one line to `%USERPROFILE%\.hob\history.tsv`, outside the repo: time, how you got there (`to`, `picker`, `direct` or `path`), the path, and for picker jumps the row you chose and what you had typed. Each visit scores by age, as zoxide does: 4 within the hour, 2 within the day, 0.5 within the week, 0.25 after that. The picker sorts by that score, so after a few days `hb to` then Enter usually lands where you meant.
 
 The file is shared by PowerShell and Git Bash and re-read only when it changes, so a jump in one window shows up in the next picker you open anywhere. Set `$env:HOB_NO_HISTORY = 1` to stop recording. Delete the file to start over.
 
@@ -109,12 +109,12 @@ Top-level names are only built-ins and plugins, so a place can never clash with 
 hob reads plugins from, in this order (a plugin name found earlier wins, so yours can replace a built-in):
 
 1. each folder listed in `pluginPaths` in your settings, for example a clone of a private plugins repo,
-2. `%LOCALAPPDATA%\hob-spike\plugins`,
+2. `%USERPROFILE%\.hob\plugins`,
 3. the built-in `plugins` folder next to `hob.psm1`.
 
 Each holds one folder per plugin with a `plugin.json`. Edits and new plugins are picked up on the next command in every shell except cmd, which needs `hob reindex`.
 
-`%LOCALAPPDATA%\hob-spike\settings.json`, all keys optional:
+`%USERPROFILE%\.hob\settings.json`, all keys optional:
 
 ```json
 {

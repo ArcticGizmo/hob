@@ -6,7 +6,7 @@ rem for & | > or %%, so a path or value cannot turn into a command.
 setlocal EnableExtensions DisableDelayedExpansion
 set "spike=%~dp0.."
 set "index=%HOB_SPIKE_INDEX%"
-if not defined index set "index=%LOCALAPPDATA%\hob-spike\index.txt"
+if not defined index set "index=%USERPROFILE%\.hob\index.txt"
 set "apply=%LOCALAPPDATA%\Temp\hob-apply-%RANDOM%%RANDOM%.txt"
 set "code=0"
 type nul > "%apply%"

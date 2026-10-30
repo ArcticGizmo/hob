@@ -10,8 +10,8 @@ _hob_src=${BASH_SOURCE[0]}
 HOB_SPIKE_DIR=${_hob_src%/*}
 HOB_SPIKE_DIR=${HOB_SPIKE_DIR%/bash}
 unset _hob_src
-HOB_INDEX_WIN=${HOB_SPIKE_INDEX:-"$LOCALAPPDATA\\hob-spike\\index.txt"}
-HOB_HISTORY_WIN=${HOB_SPIKE_HISTORY:-"$LOCALAPPDATA\\hob-spike\\history.tsv"}
+HOB_INDEX_WIN=${HOB_SPIKE_INDEX:-"$USERPROFILE\\.hob\\index.txt"}
+HOB_HISTORY_WIN=${HOB_SPIKE_HISTORY:-"$USERPROFILE\\.hob\\history.tsv"}
 HOB_DIRECTIVES_WIN="$LOCALAPPDATA\\Temp\\hob-directives-$$.txt"
 # Shell variables a directive must never set: bash runs or re-reads them, which would turn data into code.
 _HOB_DENY='^(PROMPT_COMMAND|PS[0-4]|ENV|BASH_ENV|BASH_FUNC_.*|BASHOPTS|SHELLOPTS|IFS)$'

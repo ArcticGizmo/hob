@@ -12,7 +12,13 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- LibraryImport generates unsafe marshalling code for the WM_SETTINGCHANGE broadcast. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Self-contained so there's no runtime to install; trimming drops the ~2/3 of it this never touches. Trim
+         warnings are errors: a reflection path the trimmer can't see would otherwise fail only at runtime. -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Version>0.0.0</Version>
+    <!-- Velopack points Settings > Apps at the main exe's own icon. Generated from hob.svg by tools\gen-icons.ps1. -->
+    <ApplicationIcon>hob.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
