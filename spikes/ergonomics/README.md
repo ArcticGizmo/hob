@@ -12,13 +12,7 @@ artifacts\releases\Hob-win-Setup.exe             # installs per-user to %LOCALAP
 hob update                                       # later: update from github.com/ArcticGizmo/hob releases
 ```
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds with the same `pack.ps1` and publishes a GitHub release with `SHA256SUMS.txt`. To install a published release, download the root `install.ps1`, read it, then run it; it verifies `Hob-win-Setup.exe` against the checksums before running it. Don't pipe it into `iex`.
-
-```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/ArcticGizmo/hob/main/install.ps1 -OutFile install-hob.ps1
-notepad install-hob.ps1
-.\install-hob.ps1                                # or -Version 0.1.0
-```
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds with the same `pack.ps1` and publishes a GitHub release with `SHA256SUMS.txt`. To install a published release, use the one-liner in the root [README](../../README.md#installing); it verifies `Hob-win-Setup.exe` against the checksums before running it.
 
 This follows the same pattern as tack. `hob-cli.exe` is Velopack's main program: after install and update it writes `hob` and the short name into `%LOCALAPPDATA%\hob-spike\bin` and adds that folder to your user PATH; before uninstall it removes both. It never starts PowerShell to do so, and it records what it did in `%LOCALAPPDATA%\hob-spike\hob-cli.log`. Plugin shortcuts like `nav` appear the first time you run hob in any shell. `hob-cli setup` (and `setup --undo`) repeats the PATH step by hand if anything went wrong; previous PATH values are saved in `path-backups`.
 
