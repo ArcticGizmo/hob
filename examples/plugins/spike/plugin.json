@@ -1,11 +1,11 @@
 {
   "name": "spike",
   "description": "The hob repo itself",
-  "root": "{hob}",
+  "root": "{plugin}/../../..",
   "locations": {
     "docs": "docs",
-    "ergo": "spikes/ergonomics",
-    "plugins": "spikes/ergonomics/plugins"
+    "shell": "shell",
+    "plugins": "examples/plugins"
   },
   "commands": {
     "hello": {

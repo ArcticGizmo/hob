@@ -1,7 +1,5 @@
-using System.Reflection;
 using Hob.Cli;
 using Velopack;
-using Velopack.Sources;
 
 // Velopack starts this exe with hook arguments during install, update and uninstall, runs the matching
 // callback and exits, so this has to come before anything else.
@@ -18,16 +16,26 @@ try
 {
     return command switch
     {
+        // What the shell wrappers call for everything they cannot answer from the index.
+        "hob" => await new HobCommand(HobPaths.FromEnvironment(), Console.Out, Console.Error).Run(rest),
+        "index" => Reindex(),
         "setup" => Setup(rest.Contains("--undo")),
-        "update" => await Update(rest.Contains("--check")),
-        "version" or "--version" => Print(Version()),
+        "update" => await Updater.Run(rest.Contains("--check")),
+        "version" or "--version" => Print(AppInfo.Version),
         _ => Help(),
     };
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine($"hob-cli: {ex.Message}");
+    Console.Error.WriteLine($"hob: {ex.Message}");
     return 1;
+}
+
+// The wrappers call this when the index is missing or older than something it was built from.
+static int Reindex()
+{
+    HobIndex.Refresh(Model.Load(HobPaths.FromEnvironment()), Console.Error);
+    return 0;
 }
 
 static int Setup(bool undo)
@@ -38,44 +46,6 @@ static int Setup(bool undo)
     return 0;
 }
 
-static async Task<int> Update(bool checkOnly)
-{
-    string repo = Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>()
-        .FirstOrDefault(a => a.Key == "RepositoryUrl")?.Value ?? "https://github.com/ArcticGizmo/hob";
-    var manager = new UpdateManager(new GithubSource(repo, accessToken: null, prerelease: false));
-    if (!manager.IsInstalled)
-    {
-        Console.Error.WriteLine("hob-cli: this copy isn't a Velopack install, so it can't update itself.");
-        return 1;
-    }
-
-    string current = manager.CurrentVersion?.ToString() ?? "unknown";
-    var update = await manager.CheckForUpdatesAsync();
-    if (update is null)
-    {
-        Console.WriteLine($"hob {current} is up to date.");
-        return 0;
-    }
-
-    string next = update.TargetFullRelease.Version.ToString();
-    if (checkOnly)
-    {
-        Console.WriteLine($"Update available: {current} -> {next}. Run hob update to install it.");
-        return 0;
-    }
-
-    Console.Write($"Downloading {next}... ");
-    await manager.DownloadUpdatesAsync(update);
-    Console.WriteLine("done.");
-    // Velopack's updater waits for this process to exit, swaps the install in place and runs the update hook.
-    manager.WaitExitThenApplyUpdates(update.TargetFullRelease, silent: true, restart: false);
-    Console.WriteLine($"Updating hob {current} -> {next}. It finishes as this command exits; new terminals get the new version.");
-    return 0;
-}
-
-static string Version() =>
-    Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "unknown";
-
 static int Print(string text)
 {
     Console.WriteLine(text);
@@ -85,7 +55,7 @@ static int Print(string text)
 static int Help()
 {
     Console.WriteLine($"""
-        hob-cli {Version()}: installs and updates hob. Use hob itself for everything else.
+        hob-cli {AppInfo.Version}: installs and updates hob. Use hob itself for everything else.
 
           hob-cli setup           put hob's commands on your user PATH (install does this for you)
           hob-cli setup --undo    take them off again (uninstall does this for you)

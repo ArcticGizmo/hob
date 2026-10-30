@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Velopack's mainExe. It hosts the install, update and uninstall hooks that put hob's commands on the
-       user PATH, plus `update` and `setup`. What people type goes through the generated scripts, not this. -->
+  <!-- hob itself, and Velopack's mainExe. The shell wrappers answer jumps from the index this writes and hand
+       everything else to `hob-cli hob ...`; it also hosts the install, update and uninstall hooks. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -15,6 +15,9 @@
     <!-- Self-contained so there's no runtime to install; trimming drops the ~2/3 of it this never touches. Trim
          warnings are errors: a reflection path the trimmer can't see would otherwise fail only at runtime. -->
     <PublishTrimmed>true</PublishTrimmed>
+    <!-- Every non-jump command starts this exe, so startup time is the cost that matters. Native AOT needs
+         MSVC, so pack.ps1 -Aot turns it on where that exists; the analyzers run on every build regardless. -->
+    <IsAotCompatible>true</IsAotCompatible>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Version>0.0.0</Version>
     <!-- Velopack points Settings > Apps at the main exe's own icon. Generated from hob.svg by tools\gen-icons.ps1. -->
@@ -28,6 +31,7 @@
 
   <ItemGroup>
     <AssemblyMetadata Include="RepositoryUrl" Value="https://github.com/ArcticGizmo/hob" />
+    <InternalsVisibleTo Include="Hob.Cli.Tests" />
   </ItemGroup>
 
 </Project>

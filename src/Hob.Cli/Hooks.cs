@@ -8,28 +8,17 @@ namespace Hob.Cli;
 internal static class Hooks
 {
     /// <summary>
-    /// Writes <c>hob</c> and the short name, and puts the command folder on the user PATH. Plugin shortcuts depend
-    /// on the plugins, which only the module reads, so the index is removed instead: the next hob in any shell
-    /// rebuilds it and writes them. The install folder is stable across updates, so the commands keep pointing
-    /// at the right files without being rewritten.
+    /// Writes every command (hob, the short name, plugin shortcuts) and the index, and puts the command folder on
+    /// the user PATH. The install folder is stable across updates, so the commands keep pointing at the right files.
     /// </summary>
     public static IEnumerable<string> Apply(HobPaths paths)
     {
-        Shims.Write(paths, "hob", "");
-        yield return $"wrote hob in {paths.BinDir}";
-
-        string alias = paths.Alias();
-        if (alias.Length > 0 && !alias.Equals("hob", StringComparison.OrdinalIgnoreCase))
-        {
-            Shims.Write(paths, alias, "");
-            yield return $"wrote {alias}";
-        }
-
-        if (File.Exists(paths.IndexFile))
-        {
-            File.Delete(paths.IndexFile);
-            yield return "plugin shortcuts will be rebuilt the next time hob runs";
-        }
+        var model = Model.Load(paths);
+        var warnings = new StringWriter();
+        HobIndex.Refresh(model, warnings, force: true);
+        var commands = Directory.GetFiles(paths.BinDir, "*.ps1").Select(Path.GetFileNameWithoutExtension).Order();
+        yield return $"wrote {string.Join(", ", commands)} in {paths.BinDir}";
+        foreach (string line in warnings.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) yield return line;
 
         yield return UserPath.Edit(paths.PathKey, paths.BinDir, remove: false, BackupDir(paths))
             ? $"added {paths.BinDir} to your user PATH"
@@ -37,8 +26,8 @@ internal static class Hooks
     }
 
     /// <summary>
-    /// Takes the command folder off the user PATH and deletes the generated files. Settings, your plugins and
-    /// your jump history stay, so a reinstall picks up where you left off.
+    /// Takes the command folder off the user PATH and deletes the generated files. Settings, places, your plugins
+    /// and your jump history stay, so a reinstall picks up where you left off.
     /// </summary>
     public static IEnumerable<string> Remove(HobPaths paths)
     {
