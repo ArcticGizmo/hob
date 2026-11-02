@@ -22,8 +22,8 @@ Every process start costs 50-100 ms on this EDR-scanned machine (measured: empty
 
 - **`hob-cli.exe` owns all logic**: settings, plugins, places, matching, listing, picker, recent, history ranking, version, writing the index and the PATH commands, update, setup. One C# implementation with unit tests.
 - **Each shell wrapper keeps one fast path**: it looks the words up in the index the exe writes. A definite hit (a place jump, a plugin location, a plugin command, `back`) is handled in the shell with no process start. Anything else, including every error, goes to the exe, so messages are identical everywhere.
-- The exe talks back through the existing directives file (`cd`, `env`, `unset`, `back`), so it can move PowerShell and cmd. For Git Bash it prints `/c/...` paths and `cd "$(hob path x)"` hints.
-- The picker is drawn by the exe on the console itself (`CONOUT$`, VT sequences), so it works in PowerShell, cmd and Git Bash in Windows Terminal, including inside `cd "$(hob path)"`, where stdout is captured. Under mintty there is no console, so it is skipped.
+- The exe talks back through the existing directives file (`cd`, `env`, `unset`, `back`), so it can move PowerShell and cmd. For Git Bash it prints `/c/...` paths and `cd "$(hob places x)"` hints.
+- The picker is drawn by the exe on the console itself (`CONOUT$`, VT sequences), so it works in PowerShell, cmd and Git Bash in Windows Terminal, including inside `cd "$(hob places x)"` when `x` fits several places, where stdout is captured. Under mintty there is no console, so it is skipped.
 - Plugin commands are still run by the wrapper. `.ps1` commands run in-session in PowerShell; cmd and bash now run them in a child `powershell.exe` instead of refusing.
 - The exe rebuilds the index whenever it runs and finds it stale. PowerShell and bash also check the index's watch list on every call; cmd needs `hob reindex` after hand-editing plugins (place edits go through the exe, which rewrites it).
 
@@ -71,7 +71,7 @@ Steps 1-7 done. Verified end to end against a scratch `HOB_HOME` in PS 5.1, PS 7
 
 Not yet verified:
 
-- The picker on a real console. Unit-tested with a fake terminal only; needs a hand test in Windows Terminal (PowerShell, cmd, Git Bash inside `cd "$(hob path)"`) and conhost.
+- The picker on a real console. Unit-tested with a fake terminal only; needs a hand test in Windows Terminal (PowerShell, cmd, Git Bash inside `cd "$(hob places x)"` with an ambiguous `x`) and conhost.
 - A Velopack update from 0.1.1 to this build (`hob update`): the update hook should rewrite `bin\`, drop the `nav` shortcut and seed `places.json`.
 - `pack.ps1 -Aot` (no MSVC here). The exe takes ~200-250 ms to start without it.
 
