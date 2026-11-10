@@ -14,7 +14,8 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
     public string CurrentDirectory { get; init; } = Environment.CurrentDirectory;
     public Func<ITerminal?> OpenTerminal { get; init; } = ConsoleTerminal.TryOpen;
     public Func<bool, Task<int>> Update { get; init; } = Updater.Run;
-    public Func<string, string, string?> StartTerminal { get; init; } = NewTerminal.Start;
+    public Func<string, string, bool, string?> StartTerminal { get; init; } = NewTerminal.Start;
+    public bool Tabs { get; init; } = NewTerminal.HasTabs;
 
     private Model _model = null!;
     private bool Bash => Shell == "bash";
@@ -83,13 +84,23 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
         if (_model.Places.Count == 0) return Fail("there are no places yet. Add one with: hob places add <name> [folder]");
         var history = History.Load(paths.HistoryFile);
         long now = DateTime.UtcNow.Ticks;
+        int opened = 0;
+        string Open(Pick p, bool tab)
+        {
+            if (!Directory.Exists(p.Place.Path)) return $"{p.Place.Path} does not exist";
+            if (StartTerminal(p.Place.Path, Shell, tab) is string error) return error;
+            History.Append(paths.HistoryFile, p.Place.Path, "picker", p.Index, p.Query);
+            opened++;
+            return $"opened {p.Place.Qualified} in a new {(tab ? "tab" : "window")}";
+        }
+
         // `hob places` prints a folder for something else to use, so there is nothing to open a terminal for.
-        var pick = Picker.Show(term, _model.Places, query, q => Ranking.Match(_model.Places, q, history, now), offerNewTerminal: !printOnly);
-        if (pick is null) return 1;
-        return Go(pick.Place, printOnly, "picker", pick.Index, pick.Query, pick.NewTerminal);
+        var pick = Picker.Show(term, _model.Places, query, q => Ranking.Match(_model.Places, q, history, now), printOnly ? null : Open, Tabs);
+        if (pick is null) return opened > 0 ? 0 : 1;
+        return Go(pick.Place, printOnly, "picker", pick.Index, pick.Query);
     }
 
-    private int Go(Place place, bool printOnly, string how, int pickIndex = -1, string query = "", bool newTerminal = false)
+    private int Go(Place place, bool printOnly, string how, int pickIndex = -1, string query = "")
     {
         if (!Directory.Exists(place.Path)) return Fail($"'{place.Qualified}' points at {place.Path}, which does not exist");
         if (printOnly)
@@ -103,11 +114,7 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
             stderr.WriteLine($"hob: Git Bash runs hob as a separate program, so it cannot move your shell. Use:  cd \"$(hob places {place.Qualified})\"");
             return 2;
         }
-        if (newTerminal)
-        {
-            if (StartTerminal(place.Path, Shell) is string error) return Fail(error);
-        }
-        else if (!Directive($"cd {place.Path}")) return 1;
+        if (!Directive($"cd {place.Path}")) return 1;
         History.Append(paths.HistoryFile, place.Path, how, pickIndex, query);
         return 0;
     }

@@ -6,15 +6,18 @@ namespace Hob.Cli;
 
 /// <summary>
 /// Opens another shell already in a folder, for Ctrl+Enter in the picker, and leaves the current one where it is.
-/// Inside Windows Terminal it becomes a tab in the same window; anywhere else it gets its own console window. It
-/// starts the program that ran hob, so PowerShell 7 opens PowerShell 7 rather than whatever is the default.
+/// Inside Windows Terminal it opens a Windows Terminal window or a tab in the current one; anywhere else, a
+/// console window of its own. It starts the program that ran hob, so PowerShell 7 opens PowerShell 7 rather than
+/// whatever is the default.
 /// </summary>
 internal static partial class NewTerminal
 {
     private static readonly string[] Shells = ["pwsh.exe", "powershell.exe", "cmd.exe"];
 
+    public static bool HasTabs => HobPaths.Env("WT_SESSION") is not null;
+
     /// <returns>Null once the new shell has started, otherwise why it could not.</returns>
-    public static string? Start(string folder, string shell)
+    public static string? Start(string folder, string shell, bool tab)
     {
         string program = ShellProgram(shell);
         // These belong to this one call; inherited, they would point the new shell at a directives file that is
@@ -22,7 +25,7 @@ internal static partial class NewTerminal
         foreach (string name in (string[])["HOB_DIRECTIVES", "HOB_SHELL", "HOB_PLUGIN_DIR"]) Environment.SetEnvironmentVariable(name, null);
 
         var attempts = new List<ProcessStartInfo>();
-        if (HobPaths.Env("WT_SESSION") is not null) attempts.Add(WindowsTerminalTab(folder, program));
+        if (HasTabs) attempts.Add(WindowsTerminal(folder, program, tab));
         // Shell-executing a console program is what gives it a console of its own instead of sharing this one.
         attempts.Add(new ProcessStartInfo(program) { UseShellExecute = true, WorkingDirectory = folder });
 
@@ -39,11 +42,12 @@ internal static partial class NewTerminal
         return $"could not open a new terminal in {folder}: {error}";
     }
 
-    private static ProcessStartInfo WindowsTerminalTab(string folder, string program)
+    private static ProcessStartInfo WindowsTerminal(string folder, string program, bool tab)
     {
         // wt splits its command line into subcommands at every unescaped ';'.
         static string Escape(string arg) => arg.Replace(";", "\\;");
-        return new ProcessStartInfo("wt.exe") { UseShellExecute = false, ArgumentList = { "-w", "0", "new-tab", "-d", Escape(folder), Escape(program) } };
+        // Window 0 is the one you are typing in; "new" always makes another.
+        return new ProcessStartInfo("wt.exe") { UseShellExecute = false, ArgumentList = { "-w", tab ? "0" : "new", "new-tab", "-d", Escape(folder), Escape(program) } };
     }
 
     private static string ShellProgram(string shell)

@@ -194,24 +194,56 @@ public sealed class HobCommandTests : IDisposable
     [Theory]
     [InlineData(ConsoleModifiers.Control)]
     [InlineData(ConsoleModifiers.Shift)]
-    public async Task Picker_modified_enter_opens_a_new_terminal_and_leaves_the_shell(ConsoleModifiers modifier)
+    public async Task Picker_modified_enter_opens_a_window_and_stays_open(ConsoleModifiers modifier)
     {
         string b = await AlphaBeta();
-        var term = new FakeTerminal(Key('b'), Enter(modifier));
-        Assert.Equal(0, await _hob.Command("cmd", terminal: term).Run(["to"]));
-        Assert.Equal([(b, "cmd")], _hob.Started);
+        var term = new FakeTerminal(Key('b'), Enter(modifier), Escape);
+        Assert.Equal(0, await _hob.Command("cmd", terminal: term, tabs: true).Run(["to"]));
+        Assert.Equal([(b, "cmd", false)], _hob.Started);
         Assert.Equal("", _hob.DirectiveText);
         Assert.Contains($"\tpicker\t{b}\t0\tb", File.ReadAllText(_hob.Paths.HistoryFile));
-        Assert.Contains("Ctrl+Enter new terminal", term.Written.ToString());
+        Assert.Contains("opened beta in a new window", term.Written.ToString());
     }
 
     [Fact]
-    public async Task Picker_reports_a_terminal_that_would_not_open_and_records_nothing()
+    public async Task Picker_ctrl_shift_enter_opens_a_tab_where_there_are_tabs()
+    {
+        string b = await AlphaBeta();
+        var term = new FakeTerminal(Key('b'), Enter(ConsoleModifiers.Control | ConsoleModifiers.Shift), Escape);
+        Assert.Equal(0, await _hob.Command(terminal: term, tabs: true).Run(["to"]));
+        Assert.Equal([(b, "powershell", true)], _hob.Started);
+        Assert.Contains("Ctrl+Enter window (+Shift tab)", term.Written.ToString());
+        Assert.Contains("opened beta in a new tab", term.Written.ToString());
+    }
+
+    [Fact]
+    public async Task Picker_ctrl_shift_enter_opens_a_window_where_there_are_no_tabs()
+    {
+        string b = await AlphaBeta();
+        var term = new FakeTerminal(Key('b'), Enter(ConsoleModifiers.Control | ConsoleModifiers.Shift), Escape);
+        Assert.Equal(0, await _hob.Command(terminal: term).Run(["to"]));
+        Assert.Equal([(b, "powershell", false)], _hob.Started);
+        Assert.DoesNotContain("Shift tab", term.Written.ToString());
+    }
+
+    [Fact]
+    public async Task Picker_opens_several_terminals_then_still_jumps()
+    {
+        string b = await AlphaBeta();
+        var term = new FakeTerminal(Key('b'), Enter(ConsoleModifiers.Control), Enter(ConsoleModifiers.Control | ConsoleModifiers.Shift), Enter(0));
+        Assert.Equal(0, await _hob.Command(terminal: term, tabs: true).Run(["to"]));
+        Assert.Equal([(b, "powershell", false), (b, "powershell", true)], _hob.Started);
+        Assert.Equal($"cd {b}\n", _hob.DirectiveText);
+        Assert.Equal(3, File.ReadAllLines(_hob.Paths.HistoryFile).Length);
+    }
+
+    [Fact]
+    public async Task Picker_shows_a_terminal_that_would_not_open_and_records_nothing()
     {
         await AlphaBeta();
-        var term = new FakeTerminal(Key('b'), Enter(ConsoleModifiers.Control));
+        var term = new FakeTerminal(Key('b'), Enter(ConsoleModifiers.Control), Escape);
         Assert.Equal(1, await _hob.Command(terminal: term, startError: "could not open a new terminal in x: nope").Run(["to"]));
-        Assert.Contains("could not open a new terminal", _hob.Err.ToString());
+        Assert.Contains("could not open a new terminal in x: nope", term.Written.ToString());
         Assert.False(File.Exists(_hob.Paths.HistoryFile));
     }
 
@@ -270,6 +302,8 @@ public sealed class HobCommandTests : IDisposable
 
     private static ConsoleKeyInfo Enter(ConsoleModifiers modifiers) =>
         new(modifiers == ConsoleModifiers.Control ? '\n' : '\r', ConsoleKey.Enter, (modifiers & ConsoleModifiers.Shift) != 0, false, (modifiers & ConsoleModifiers.Control) != 0);
+
+    private static readonly ConsoleKeyInfo Escape = new('\u001b', ConsoleKey.Escape, false, false, false);
 
     private sealed class FakeTerminal(params ConsoleKeyInfo[] keys) : ITerminal
     {

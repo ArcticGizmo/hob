@@ -81,12 +81,14 @@ A command whose `run` has more than one entry (`["node", "{plugin}\\x.js"]`) is 
 to> docs
   docs           C:\Users\you\Documents
 > work docs      C:\work\docs
-  2/9   Up/Down move   Enter jump   Ctrl+Enter new terminal   Esc cancel
+  2/9   Enter jump   Ctrl+Enter window (+Shift tab)   Esc cancel
 ```
 
-Type to filter: each space-separated word must appear in the place's name, plugin or path. Places whose name starts with your first word rank first, then by frecency. Keys: Up/Down or Ctrl+P/Ctrl+N, PageUp/PageDown, Backspace, Ctrl+U to clear, Enter to jump, Ctrl+Enter or Shift+Enter to open the place in a new terminal, Esc or Ctrl+C to cancel.
+Type to filter: each space-separated word must appear in the place's name, plugin or path. Places whose name starts with your first word rank first, then by frecency. Keys: Up/Down or Ctrl+P/Ctrl+N, PageUp/PageDown, Backspace, Ctrl+U to clear, Enter to jump, Ctrl+Enter or Shift+Enter to open the place in a new window, Ctrl+Shift+Enter to open it in a new tab, Esc or Ctrl+C to cancel.
 
-Ctrl+Enter leaves your shell where it is and starts the same shell program that ran hob (pwsh, powershell or cmd) in the chosen folder: as a new tab in the current window inside Windows Terminal (`wt -w 0 new-tab -d`), otherwise in a console window of its own. It counts as a picker jump in the history. It only works where the terminal passes the modifier through to the console; where it does not (VS Code's terminal may not), the key is a plain Enter. `hob places` prints a folder rather than moving, so there Ctrl+Enter is also a plain Enter.
+Opening a place in a new terminal leaves your shell where it is and starts the same shell program that ran hob (pwsh, powershell or cmd) in the chosen folder. Inside Windows Terminal a window is a new Windows Terminal window (`wt -w new`) and a tab joins the current window (`wt -w 0`); outside it there are no tabs, so both open a console window of its own. The picker stays open afterwards and says what it opened, so you can open several places from one `hob to`; Enter still jumps and Esc closes it. Each one counts as a picker jump in the history.
+
+This only works where the terminal passes the modifiers through to the console; where it does not (VS Code's terminal may not), the key is a plain Enter. `hob places` prints a folder rather than moving, so there Ctrl+Enter is also a plain Enter.
 
 The exe draws it straight onto the console (`CONOUT$`, VT sequences), never on stdout, so it works in PowerShell, cmd, and Git Bash inside `cd "$(hob places d)"`. It draws under the prompt and erases itself afterwards. Without a console (input redirected, or Git Bash under mintty) hob prints the candidates instead.
 
