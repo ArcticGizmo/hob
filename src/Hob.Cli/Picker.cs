@@ -11,8 +11,16 @@ internal static class Picker
 {
     private const string Esc = "\u001b";
 
-    public static Pick? Show(ITerminal term, IReadOnlyList<Place> places, string query, Func<string, List<Place>> match)
+    /// <param name="open">
+    /// Opens a pick in a new terminal (a tab when the bool is true) and returns what to tell you. The picker stays
+    /// up afterwards, so several places can be opened from one <c>hob to</c>. Null leaves only Enter.
+    /// </param>
+    /// <param name="tabs">Whether there are tabs to open into, which only Windows Terminal has.</param>
+    public static Pick? Show(ITerminal term, IReadOnlyList<Place> places, string query, Func<string, List<Place>> match, Func<Pick, bool, string>? open = null, bool tabs = false)
     {
+        string keys = open is null ? "Up/Down move   Enter jump   Esc cancel"
+            : tabs ? "Enter jump   Ctrl+Enter window (+Shift tab)   Esc cancel"
+            : "Enter jump   Ctrl+Enter window   Esc cancel";
         int visible = Math.Max(1, Math.Min(10, Math.Min(places.Count, term.Height - 4)));
         int rows = visible + 2;
         int width = Math.Max(20, term.Width - 1);
@@ -21,6 +29,7 @@ internal static class Picker
         // Make room first, so drawing never scrolls, then remember the top-left of the area.
         term.Write("\r" + new string('\n', rows - 1) + $"{Esc}[{rows - 1}A{Esc}7");
         int selected = 0, offset = 0;
+        string? status = null;
         try
         {
             while (true)
@@ -39,18 +48,26 @@ internal static class Picker
                     if (i == selected && hits.Count > 0) Row(frame, ">" + text[1..], width, $"{Esc}[30;46m");
                     else Row(frame, text, width, "");
                 }
-                Row(frame, $"  {hits.Count}/{places.Count}   Up/Down move   Enter jump   Esc cancel", width, $"{Esc}[90m", last: true);
+                if (status is not null) Row(frame, $"  {status}", width, $"{Esc}[33m", last: true);
+                else Row(frame, $"  {hits.Count}/{places.Count}   {keys}", width, $"{Esc}[90m", last: true);
                 frame.Append($"{Esc}8{Esc}[{Math.Min(4 + query.Length, width)}C{Esc}[?25h");
                 term.Write(frame.ToString());
 
                 var key = term.ReadKey();
+                status = null;
                 bool control = (key.Modifiers & ConsoleModifiers.Control) != 0;
+                bool shift = (key.Modifiers & ConsoleModifiers.Shift) != 0;
                 if (control && key.Key == ConsoleKey.C) return null;
                 if (control && key.Key == ConsoleKey.U) { query = ""; selected = 0; continue; }
                 if (control && key.Key == ConsoleKey.N) { selected++; continue; }
                 if (control && key.Key == ConsoleKey.P) { selected--; continue; }
                 switch (key.Key)
                 {
+                    // Shift+Enter alone is a window too, for terminals that keep Ctrl+Enter for themselves. Where
+                    // neither modifier reaches the console, it is a plain jump.
+                    case ConsoleKey.Enter when hits.Count > 0 && open is not null && (control || shift):
+                        status = open(new Pick(hits[selected], selected, query), tabs && control && shift);
+                        break;
                     case ConsoleKey.Enter when hits.Count > 0: return new Pick(hits[selected], selected, query);
                     case ConsoleKey.Escape: return null;
                     case ConsoleKey.UpArrow: selected--; break;

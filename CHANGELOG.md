@@ -9,6 +9,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [v0.2.2] - 2026-11-10
+
+- Ctrl+Enter in the `hob to` picker opens the place in a new window
+- Ctrl+Shift+Enter opens it in a new Windows Terminal tab instead
+- Focus comes back to the picker (the new window has to wait its turn)
+- The picker stays open, so you can open several at once
+- Shift+Enter also opens a window, for terminals that keep Ctrl+Enter
+
+---
+
 ## [v0.2.1] - 2026-10-30
 
 - Manage places with `hob places add <name> [folder]` and `hob places rm <name>`
