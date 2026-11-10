@@ -197,7 +197,9 @@ To run hob from a checkout:
 dotnet test tests\Hob.Cli.Tests              # unit tests
 ```
 
-Rerun `.\build\dev.ps1` after changing the exe or the shell scripts. To try it without touching your real PATH or data folder, see [Testing without touching your machine](docs/how-it-works.md#testing-without-touching-your-machine).
+Rerun `.\build\dev.ps1` after changing the exe or the shell scripts.
+
+To try a change without touching your PATH, your installed hob or `%USERPROFILE%\.hob`, run `build\try.cmd` followed by what you would type after `hob`, for example `build\try.cmd to`. It builds the checkout and runs it against a scratch data folder with the demo plugin loaded; `build\try.cmd --reset` deletes that folder. It runs the exe directly, so it can't move your shell; for jumps, see [Testing without touching your machine](docs/how-it-works.md#testing-without-touching-your-machine).
 
 | Path | What it is |
 | --- | --- |
@@ -206,5 +208,5 @@ Rerun `.\build\dev.ps1` after changing the exe or the shell scripts. To try it w
 | `shell/templates` | The per-name scripts written into the commands folder |
 | `tests/Hob.Cli.Tests` | Unit tests |
 | `examples/plugins` | A demo plugin with one of each kind of command; add the folder to `pluginPaths` to try it |
-| `build` | `pack.ps1` (release), `dev.ps1` (checkout build) |
+| `build` | `pack.ps1` (release), `dev.ps1` (checkout build), `try.cmd` (checkout build against a scratch data folder) |
 | `install.ps1` | The checksum-verifying web installer |

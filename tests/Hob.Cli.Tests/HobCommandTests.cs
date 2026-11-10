@@ -9,6 +9,9 @@ public sealed class HobCommandTests : IDisposable
     [Fact]
     public async Task Empty_words_show_the_overview_rather_than_an_ambiguity()
     {
+        // No short name, which would warn on a machine where an installed hob already puts `hb` on PATH.
+        Directory.CreateDirectory(_hob.Paths.DataDir);
+        File.WriteAllText(_hob.Paths.SettingsFile, """{ "alias": "" }""");
         Assert.Equal(0, await _hob.Command().Run([""]));
         Assert.Contains("Commands", _hob.Out.ToString());
         Assert.Equal("", _hob.Err.ToString());
