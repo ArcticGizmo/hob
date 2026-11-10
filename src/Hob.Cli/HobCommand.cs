@@ -14,6 +14,7 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
     public string CurrentDirectory { get; init; } = Environment.CurrentDirectory;
     public Func<ITerminal?> OpenTerminal { get; init; } = ConsoleTerminal.TryOpen;
     public Func<bool, Task<int>> Update { get; init; } = Updater.Run;
+    public Func<string, string, string?> StartTerminal { get; init; } = NewTerminal.Start;
 
     private Model _model = null!;
     private bool Bash => Shell == "bash";
@@ -82,12 +83,13 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
         if (_model.Places.Count == 0) return Fail("there are no places yet. Add one with: hob places add <name> [folder]");
         var history = History.Load(paths.HistoryFile);
         long now = DateTime.UtcNow.Ticks;
-        var pick = Picker.Show(term, _model.Places, query, q => Ranking.Match(_model.Places, q, history, now));
+        // `hob places` prints a folder for something else to use, so there is nothing to open a terminal for.
+        var pick = Picker.Show(term, _model.Places, query, q => Ranking.Match(_model.Places, q, history, now), offerNewTerminal: !printOnly);
         if (pick is null) return 1;
-        return Go(pick.Place, printOnly, "picker", pick.Index, pick.Query);
+        return Go(pick.Place, printOnly, "picker", pick.Index, pick.Query, pick.NewTerminal);
     }
 
-    private int Go(Place place, bool printOnly, string how, int pickIndex = -1, string query = "")
+    private int Go(Place place, bool printOnly, string how, int pickIndex = -1, string query = "", bool newTerminal = false)
     {
         if (!Directory.Exists(place.Path)) return Fail($"'{place.Qualified}' points at {place.Path}, which does not exist");
         if (printOnly)
@@ -101,7 +103,11 @@ internal sealed class HobCommand(HobPaths paths, TextWriter stdout, TextWriter s
             stderr.WriteLine($"hob: Git Bash runs hob as a separate program, so it cannot move your shell. Use:  cd \"$(hob places {place.Qualified})\"");
             return 2;
         }
-        if (!Directive($"cd {place.Path}")) return 1;
+        if (newTerminal)
+        {
+            if (StartTerminal(place.Path, Shell) is string error) return Fail(error);
+        }
+        else if (!Directive($"cd {place.Path}")) return 1;
         History.Append(paths.HistoryFile, place.Path, how, pickIndex, query);
         return 0;
     }

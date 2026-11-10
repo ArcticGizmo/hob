@@ -34,8 +34,15 @@ internal sealed class TempHob : IDisposable
         File.WriteAllText(Path.Combine(dir, "plugin.json"), json);
     }
 
-    public HobCommand Command(string shell = "powershell", ITerminal? terminal = null) =>
-        new(Paths, Out, Err) { Shell = shell, DirectivesFile = Directives, CurrentDirectory = Root, OpenTerminal = () => terminal, Update = _ => Task.FromResult(0) };
+    /// <summary>Every (folder, shell) a command asked to open a new terminal in; none is really opened.</summary>
+    public List<(string Folder, string Shell)> Started { get; } = [];
+
+    public HobCommand Command(string shell = "powershell", ITerminal? terminal = null, string? startError = null) =>
+        new(Paths, Out, Err)
+        {
+            Shell = shell, DirectivesFile = Directives, CurrentDirectory = Root, OpenTerminal = () => terminal, Update = _ => Task.FromResult(0),
+            StartTerminal = (folder, s) => { Started.Add((folder, s)); return startError; },
+        };
 
     public async Task<int> Run(params string[] words)
     {

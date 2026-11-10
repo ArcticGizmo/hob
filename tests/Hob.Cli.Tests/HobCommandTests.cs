@@ -191,6 +191,43 @@ public sealed class HobCommandTests : IDisposable
         Assert.Equal("", _hob.DirectiveText);
     }
 
+    [Theory]
+    [InlineData(ConsoleModifiers.Control)]
+    [InlineData(ConsoleModifiers.Shift)]
+    public async Task Picker_modified_enter_opens_a_new_terminal_and_leaves_the_shell(ConsoleModifiers modifier)
+    {
+        string b = await AlphaBeta();
+        var term = new FakeTerminal(Key('b'), Enter(modifier));
+        Assert.Equal(0, await _hob.Command("cmd", terminal: term).Run(["to"]));
+        Assert.Equal([(b, "cmd")], _hob.Started);
+        Assert.Equal("", _hob.DirectiveText);
+        Assert.Contains($"\tpicker\t{b}\t0\tb", File.ReadAllText(_hob.Paths.HistoryFile));
+        Assert.Contains("Ctrl+Enter new terminal", term.Written.ToString());
+    }
+
+    [Fact]
+    public async Task Picker_reports_a_terminal_that_would_not_open_and_records_nothing()
+    {
+        await AlphaBeta();
+        var term = new FakeTerminal(Key('b'), Enter(ConsoleModifiers.Control));
+        Assert.Equal(1, await _hob.Command(terminal: term, startError: "could not open a new terminal in x: nope").Run(["to"]));
+        Assert.Contains("could not open a new terminal", _hob.Err.ToString());
+        Assert.False(File.Exists(_hob.Paths.HistoryFile));
+    }
+
+    [Fact]
+    public async Task Places_picker_treats_ctrl_enter_as_enter()
+    {
+        string b = await AlphaBeta();
+        await _hob.Run("places", "add", "bend", _hob.Folder("bend"));
+        _hob.Out.GetStringBuilder().Clear();
+        var term = new FakeTerminal(Key('t'), Enter(ConsoleModifiers.Control));
+        Assert.Equal(0, await _hob.Command(terminal: term).Run(["places", "be"]));
+        Assert.Equal(b, _hob.Out.ToString().Trim());
+        Assert.Empty(_hob.Started);
+        Assert.DoesNotContain("Ctrl+Enter", term.Written.ToString());
+    }
+
     [Fact]
     public async Task Plugin_root_and_location_jump()
     {
@@ -219,14 +256,28 @@ public sealed class HobCommandTests : IDisposable
         Assert.Contains("Did you mean 'hob to docs'?", _hob.Err.ToString());
     }
 
+    private async Task<string> AlphaBeta()
+    {
+        string a = _hob.Folder("alpha"), b = _hob.Folder("beta");
+        await _hob.Run("places", "add", "alpha", a);
+        await _hob.Run("places", "add", "beta", b);
+        _hob.Out.GetStringBuilder().Clear();
+        File.Delete(_hob.Paths.HistoryFile);
+        return b;
+    }
+
     private static ConsoleKeyInfo Key(char c) => new(c, ConsoleKey.A + (char.ToUpperInvariant(c) - 'A'), false, false, false);
+
+    private static ConsoleKeyInfo Enter(ConsoleModifiers modifiers) =>
+        new(modifiers == ConsoleModifiers.Control ? '\n' : '\r', ConsoleKey.Enter, (modifiers & ConsoleModifiers.Shift) != 0, false, (modifiers & ConsoleModifiers.Control) != 0);
 
     private sealed class FakeTerminal(params ConsoleKeyInfo[] keys) : ITerminal
     {
         private readonly Queue<ConsoleKeyInfo> _keys = new(keys);
+        public System.Text.StringBuilder Written { get; } = new();
         public int Width => 100;
         public int Height => 30;
-        public void Write(string text) { }
+        public void Write(string text) => Written.Append(text);
         public ConsoleKeyInfo ReadKey() => _keys.Dequeue();
         public void Dispose() { }
     }

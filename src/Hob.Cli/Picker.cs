@@ -1,6 +1,6 @@
 namespace Hob.Cli;
 
-internal sealed record Pick(Place Place, int Index, string Query);
+internal sealed record Pick(Place Place, int Index, string Query, bool NewTerminal = false);
 
 /// <summary>
 /// Drawn inline under the prompt rather than full-screen, and erased afterwards, so the scrollback keeps only
@@ -11,8 +11,9 @@ internal static class Picker
 {
     private const string Esc = "\u001b";
 
-    public static Pick? Show(ITerminal term, IReadOnlyList<Place> places, string query, Func<string, List<Place>> match)
+    public static Pick? Show(ITerminal term, IReadOnlyList<Place> places, string query, Func<string, List<Place>> match, bool offerNewTerminal = false)
     {
+        string keys = offerNewTerminal ? "Enter jump   Ctrl+Enter new terminal   Esc cancel" : "Enter jump   Esc cancel";
         int visible = Math.Max(1, Math.Min(10, Math.Min(places.Count, term.Height - 4)));
         int rows = visible + 2;
         int width = Math.Max(20, term.Width - 1);
@@ -39,7 +40,7 @@ internal static class Picker
                     if (i == selected && hits.Count > 0) Row(frame, ">" + text[1..], width, $"{Esc}[30;46m");
                     else Row(frame, text, width, "");
                 }
-                Row(frame, $"  {hits.Count}/{places.Count}   Up/Down move   Enter jump   Esc cancel", width, $"{Esc}[90m", last: true);
+                Row(frame, $"  {hits.Count}/{places.Count}   Up/Down move   {keys}", width, $"{Esc}[90m", last: true);
                 frame.Append($"{Esc}8{Esc}[{Math.Min(4 + query.Length, width)}C{Esc}[?25h");
                 term.Write(frame.ToString());
 
@@ -51,7 +52,11 @@ internal static class Picker
                 if (control && key.Key == ConsoleKey.P) { selected--; continue; }
                 switch (key.Key)
                 {
-                    case ConsoleKey.Enter when hits.Count > 0: return new Pick(hits[selected], selected, query);
+                    // Shift+Enter too, for terminals that keep Ctrl+Enter for themselves. Where neither modifier
+                    // reaches the console, it is a plain jump.
+                    case ConsoleKey.Enter when hits.Count > 0:
+                        bool newTerminal = offerNewTerminal && (key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Shift)) != 0;
+                        return new Pick(hits[selected], selected, query, newTerminal);
                     case ConsoleKey.Escape: return null;
                     case ConsoleKey.UpArrow: selected--; break;
                     case ConsoleKey.DownArrow: selected++; break;
